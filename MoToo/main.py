@@ -10,7 +10,8 @@ from Divs.LatestDiv import drawLatestDiv, getPriceColor
 from Divs.Strategy import *
 from Divs.ControlPanel import *
 from datetime import datetime
-DB_PATH = 'data/user.db' 
+current_directory = os.getcwd()
+DB_PATH = f'{current_directory}/MoToo/data/user.db' 
 latestDataStr = ""
 #开始Http请求
 #url:地址
@@ -508,8 +509,9 @@ gPaint.onPaintChartHScale = drawChartHScale
 #初始化窗体
 createMainWindow(gPaint, "facecat-py", WndProc)
 # 打开并读取XML文件
+
 xml = ""
-with open('xml\\mainframe.xml', 'r', encoding='utf-8') as file:
+with open(f'{current_directory}\\MoToo\\xml\\mainframe.xml', 'r', encoding='utf-8') as file:
     xml = file.read()
 
 
