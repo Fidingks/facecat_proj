@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8" ?>
+        <html xmlns="facecat">
+        <body>
+            <div bordercolor="none" name="divInner" dock="fill">
+                <div type="tab" dock="fill" selectedindex="0" backcolor="none" bordercolor="none"
+                name="tabFunc">
+                    <div type="tabpage" text="主界面" name="divMain" backcolor="none">
+                    <div type="splitlayout" layoutstyle="lefttoright" bordercolor="none" dock="fill"
+                            size="650,510" candragsplitter="true" splitterposition="650,1" name="divCodingRight2">
+                            <table name="gridStocks" headerheight="30" dock="fill"
+                                gridlinecolor="none" bordercolor="none" showvscrollbar="true" showhscrollbar="true"
+                                allowpreviewsevent="true" allowdragscroll="true">
+                                <tr>
+                                    <th name="colP0" text="序" width="40" allowdrag="true" allowresize="true"/>
+                                    <th name="colP1" text="代码" width="70" allowdrag="true" allowresize="true"/>
+                                    <th name="colP2" text="名称" width="70" allowdrag="true" allowresize="true" />
+                                    <th name="colP3" text="现价" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP4" text="涨幅" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP5" text="涨跌" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP9" text="总量" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP10" text="总额" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP11" text="量比" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP12" text="PE动" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP13" text="振幅" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP14" text="换手率" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP15" text="总市值" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP16" text="流值" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP17" text="行业分类板块" width="80" allowdrag="true" allowresize="true" cellalign="center"/>
+                                    <th name="colP18" text="涨停价" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP19" text="跌停价" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP20" text="金比" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP21" text="涨跌比" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP22" text="涨速" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP23" text="净资产收益率" width="100" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP24" text="自设指标" width="80" allowdrag="true" allowresize="true" cellalign="right"/>
+                                </tr>
+                            </table>
+                            <div type="splitlayout" layoutstyle="toptobottom" bordercolor="none" dock="fill"
+                                size="400,400" candragsplitter="true" splitterposition="380,1">
+                                <div type="splitlayout" layoutstyle="righttoleft" bordercolor="none" dock="fill"
+                                    size="400,400" candragsplitter="true" splitterposition="200,1">
+                                    <div type="custom" cid="latestdiv" name="divLatest"/>
+                                    <div type="custom" cid="mychart" name="mainChart1" cycle="0" candledivpercent="0.7"
+                                            voldivpercent="0.3" backcolor="none" bordercolor="none"/>
+                                </div>
+                                <div type="splitlayout" layoutstyle="lefttoright" bordercolor="none" dock="fill"
+                                    size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="200,1">
+                                    <div type="custom" cid="mychart" name="mainChart2" cycle="5" candledivpercent="0.7"
+                                            voldivpercent="0.3" backcolor="none" bordercolor="none"/>
+                                    <div type="custom" cid="mychart" name="mainChart3" cycle="1440" candledivpercent="0.7"
+                                            voldivpercent="0.3" backcolor="none" bordercolor="none"/>
+                                </div>
+                            </div>
+                        </div>
+                        </div>
+                        <div type="tabpage" text="多K线" name="divMulti" backcolor="none">
+                            <div type="splitlayout" layoutstyle="lefttoright" backcolor="none" bordercolor="none"
+                                dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="133,1">
+                                <div type="splitlayout" layoutstyle="toptobottom" backcolor="none" bordercolor="none"
+                                    dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="267,1">
+                                    <div type="splitlayout" layoutstyle="toptobottom" backcolor="none" bordercolor="none"
+                                        dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="200,1">
+                                        <div type="custom" cid="mychart" name="chart1" cycle="1" nativerefresh="true" candledivpercent="1"
+                                            voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                        <div type="custom" cid="mychart" name="chart2" cycle="5" nativerefresh="true" candledivpercent="1"
+                                            voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                    </div>
+                                    <div type="custom" cid="mychart" name="chart3" cycle="10" nativerefresh="true" candledivpercent="1"
+                                        voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                </div>
+                                <div type="splitlayout" layoutstyle="lefttoright" backcolor="none" bordercolor="none"
+                                    dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="200,1">
+                                    <div type="splitlayout" layoutstyle="toptobottom" backcolor="none" bordercolor="none"
+                                        dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="267,1">
+                                        <div type="splitlayout" layoutstyle="toptobottom" backcolor="none" bordercolor="none"
+                                            dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="200,1">
+                                            <div type="custom" cid="mychart" name="chart4" cycle="15" nativerefresh="true" candledivpercent="1"
+                                                voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                            <div type="custom" cid="mychart" name="chart5" cycle="20" nativerefresh="true" candledivpercent="1"
+                                                voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                        </div>
+                                        <div type="custom" cid="mychart" name="chart6" cycle="30" nativerefresh="true" candledivpercent="1"
+                                            voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                    </div>
+                                    <div type="splitlayout" layoutstyle="toptobottom" backcolor="none" bordercolor="none"
+                                        dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="267,1">
+                                        <div type="splitlayout" layoutstyle="toptobottom" backcolor="none" bordercolor="none"
+                                            dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="200,1">
+                                            <div type="custom" cid="mychart" name="chart7" cycle="1440" nativerefresh="true"
+                                                candledivpercent="1" voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                            <div type="custom" cid="mychart" name="chart8" cycle="10080" nativerefresh="true"
+                                                candledivpercent="1" voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                        </div>
+                                        <div type="custom" cid="mychart" name="chart9" cycle="43200" nativerefresh="true"
+                                            candledivpercent="1" voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+						<div type="tabpage" text="监控面板" name="monitor_page" backcolor="none">
+                            <div type="splitlayout" layoutstyle="righttoleft" bordercolor="none" dock="fill"
+                                        size="400,400" candragsplitter="true"  splitterposition="200,1" allowresize="false">
+                                <div type="custom" cid="control" name="control"/>
+                                    
+                                <div type="div" name="allStrategy" showhscrollbar="true" showvscrollbar="true" topMost="true">
+                                </div>
+                                
+                            </div >
+                        </div>
+                    </div>
+                </div>
+        </body>
+    </html>
