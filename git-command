@@ -1,0 +1,17 @@
+git init 初始化新仓库
+git remote add origin <url> 将远程仓库添加为 origin
+
+git branch -a 查看所有分支
+git checkout -b <branch_name> 创建branch_name 分支并切换到这
+git checkout -d <branch> 切换到已有分支
+git push origin <branch> 推送新分支到远程
+
+git status 查看状态
+git add . 暂存更改
+git commit -am "your change" 快速提交
+
+git pull origin <branch> 拉取远程分支并合并
+git push origin <branch> 将本地仓库代码推送到远程
+
+git log 
+git log --oneline
