@@ -1,4 +1,3 @@
-# -*- coding:utf-8 -*-
 #! python3
 from facecat import *
 #这里可能需要pip install requests
