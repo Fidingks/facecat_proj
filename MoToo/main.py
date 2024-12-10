@@ -11,8 +11,10 @@ from Divs.Strategy import *
 from Divs.ControlPanel import *
 from datetime import datetime
 current_directory = os.getcwd()
-DB_PATH = f'{current_directory}/MoToo/data/user.db' 
+DB_PATH = f'{current_directory}/data/user.db' 
 latestDataStr = ""
+
+
 #开始Http请求
 #url:地址
 #callBack回调
@@ -511,7 +513,7 @@ createMainWindow(gPaint, "facecat-py", WndProc)
 # 打开并读取XML文件
 
 xml = ""
-with open(f'{current_directory}\\MoToo\\xml\\mainframe.xml', 'r', encoding='utf-8') as file:
+with open(f'{current_directory}\\xml\\mainframe.xml', 'r', encoding='utf-8') as file:
     xml = file.read()
 
 

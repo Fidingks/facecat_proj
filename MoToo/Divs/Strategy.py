@@ -1,5 +1,16 @@
 from facecat import * 
-
+import sqlite3
+from DataApi.sub_data import BinanceWebSocketClient
+from MonitorStrategy import mo_price
+global ws_client
+current_directory = os.getcwd()
+DB_PATH = f'{current_directory}/data/user.db' 
+mo = mo_price.PriceMonitor()
+def on_message(data):
+	mo.process(data)
+	pass
+ws_client = BinanceWebSocketClient(on_message_callback=on_message)
+ws_client.start()
 def ChangeLocation(views, x):
     # 每个按钮的宽度、高度和间隔
     button_width = 200
@@ -30,7 +41,39 @@ class StrategyDiv(FCView):
         super().__init__()
         self.strategy = {}
         self.viewType = "div" #类型
+        self.status = "inactive" # 
         self.onClick = editStrategy
+    
+    def unsubscribe(self):
+        strategy_id = (self.strategy[1])
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute('''
+        UPDATE strategy
+        SET active = ?
+        WHERE strategy_id = ?
+        ''', (0, strategy_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        symbol = self.strategy[2]
+        ws_client.unsubscribe(f"{symbol}@avgPrice")
+
+    def subscribe(self):
+        strategy_id = (self.strategy[1])
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute('''
+        UPDATE strategy
+        SET active = ?
+        WHERE strategy_id = ?
+        ''', (1, strategy_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        symbol = self.strategy[2]
+        print(symbol)
+        ws_client.subscribe(f"{symbol}@avgPrice")
 def onPaintDiv(view, paint, clipRect):
     print("ok")
 
@@ -164,12 +207,21 @@ def editStrategy(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks)
     x = firstPoint.x
     y = firstPoint.y
     if clicks == 2:
+         if view.status == "active":
+            view.status = "inactive"
+            view.borderColor = "rgb(255,255,255)"
          print("编辑策略")
     elif clicks == 1:
-        if 1:
+        if view.status == "inactive":
             view.borderColor = "rgb(184,255,137)"
-        elif 2:
+            view.status = "active"
+            view.subscribe()
+            print("启动策略")
+        elif view.status == "active":
             view.borderColor = "rgb(255,255,255)"
+            view.status = "inactive"
+            view.unsubscribe()
+            print("停止策略")
 
     if x > 20 and x < 80 and y > 260 and y < 280:
         print(firstPoint.x)
