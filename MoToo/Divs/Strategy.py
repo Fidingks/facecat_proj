@@ -29,27 +29,7 @@ def ChangeLocation(views, x):
         if col >= buttons_per_row:  # 如果当前列数超出每行按钮数，换到下一行
             col = 0
             row += 1
-        
-def scroll(view, mp, buttons, clicks, delta):
-    if view.viewType == "strategyDiv":
-        view = view.parent
-    elif view.viewType == "div":
-         pass
-    oldScrollV = view.scrollV
-    if delta > 0:
-        oldScrollV -= 100
-    elif delta < 0:
-        oldScrollV += 100
-    contentHeight = getDivContentHeight(view)
-    if contentHeight < view.size.cy:
-        view.scrollV = 0
-    else:
-        if oldScrollV < 0:
-            oldScrollV = 0
-        elif oldScrollV > contentHeight - view.size.cy:
-            oldScrollV = contentHeight - view.size.cy
-        view.scrollV = oldScrollV
-    invalidateView(view)
+       
          
 #图层
 class StrategyDiv(FCView):
@@ -67,7 +47,7 @@ class StrategyDiv(FCView):
         self.onPaintBorder = self.onPaintStrategyDivBorder
         self.borderWidth = 2
         self.borderColor = "rgb(255, 255, 255)"
-        self.onMouseWheel = scroll
+        self.onMouseWheel = self.scroll
 
     def unsubscribe(self):
         strategy_id = (self.strategy[1])
@@ -145,7 +125,27 @@ class StrategyDiv(FCView):
             paint.drawRoundRect(view.borderColor, view.borderWidth, 0, 0, 0, view.size.cx, view.size.cy, view.cornerRadius)
             paint.drawEllipse("rgb(255,0,0)", 3, 0, 0, 0, 5, 5)
         drawDivScrollBar(view, paint, clipRect)
-            
+    # 修改鼠标滚轮实现
+    def scroll(self, view, mp, buttons, clicks, delta):
+        if view.viewType == "strategyDiv":
+            view = view.parent
+        elif view.viewType == "div":
+            pass
+        oldScrollV = view.scrollV
+        if delta > 0:
+            oldScrollV -= 100
+        elif delta < 0:
+            oldScrollV += 100
+        contentHeight = getDivContentHeight(view)
+        if contentHeight < view.size.cy:
+            view.scrollV = 0
+        else:
+            if oldScrollV < 0:
+                oldScrollV = 0
+            elif oldScrollV > contentHeight - view.size.cy:
+                oldScrollV = contentHeight - view.size.cy
+            view.scrollV = oldScrollV
+        invalidateView(view)
 
     #获取价格数据
     def getPriceColor(self, price, comparePrice):

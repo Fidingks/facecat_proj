@@ -7,4 +7,6 @@ from facecat import *
 def drawControlPanel(view, paint, clipRect):
 	drawFont = "Default,14"
 	paint.drawText("编辑策略", "rgb(175,196,228)", drawFont, 5,  10)
-	
+
+def AddStrategyToAll(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
+	print("添加一个策略")

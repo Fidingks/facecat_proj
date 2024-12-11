@@ -521,14 +521,12 @@ renderFaceCat(gPaint, xml)
 # 绘制控制面板
 control_panel = findViewByName("control", gPaint.views)
 addButton = FCButton()
-addViewToParent(addButton, control_panel)
-addButton.onPaint = onPaintAddButton
-addButton.location = FCPoint(50, 200)
 addButton.text = "添加策略"
-
+addButton.location = FCPoint(100,200)
+addViewToParent(addButton,  control_panel)
+addButton.onClick = AddStrategyToAll
 # 绘制策略图层
 StrategyView = findViewByName("allStrategy", gPaint.views)
-StrategyView.onMouseWheel = scroll # 重写滚动，提高滚动的速度	
 with sqlite3.connect(DB_PATH) as db:
 	cursor = db.execute("SELECT * FROM strategy")
 	results = cursor.fetchall()  # 获取单行数据
