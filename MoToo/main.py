@@ -271,7 +271,7 @@ def onPaint(view, paint, clipRect):
 	if view.viewType == "latestdiv":
 		drawLatestDiv(view, paint, latestDataStr, clipRect)
 	elif view.viewType == "control":
-		drawControlPanel(view, paint, latestDataStr, clipRect)
+		drawControlPanel(view, paint, clipRect)
 	elif view.viewName == "allStrategy":
 		x = view.size.cx
 		ChangeLocation(view.views, x)
@@ -529,26 +529,15 @@ addButton.text = "添加策略"
 # 绘制策略图层
 StrategyView = findViewByName("allStrategy", gPaint.views)
 StrategyView.onMouseWheel = scroll # 重写滚动，提高滚动的速度	
-mystrategy = ["600000.SH",1, "涨破 920 跌破 880", 0, 10, 5]
 with sqlite3.connect(DB_PATH) as db:
 	cursor = db.execute("SELECT * FROM strategy")
 	results = cursor.fetchall()  # 获取单行数据
 	print(results)
 	for result in results:
 		x = StrategyView.size.cx
-		div_every_line = int(x / 200) + 1
 		strategyDiv = StrategyDiv()
 		strategyDiv.strategy = result
 		addViewToParent(strategyDiv, StrategyView)
-		strategyDiv.size = FCSize(200, 300)
-		strategyDiv.viewType = "strategyDiv"
-		strategyDiv.backColor = "rgb(0,0,0)"
-		strategyDiv.cornerRadius = 10
-		strategyDiv.onPaint = onPaintStrategyDiv
-		strategyDiv.onPaintBorder = onPaintStrategyDivBorder
-		strategyDiv.borderWidth = 2
-		strategyDiv.borderColor = "rgb(255, 255, 255)"
-		strategyDiv.onMouseWheel = scroll
 	ChangeLocation(StrategyView.views, x)
 
 gridStocks = findViewByName("gridStocks", gPaint.views)
