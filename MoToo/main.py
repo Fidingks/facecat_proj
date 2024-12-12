@@ -529,7 +529,7 @@ addButton.onClick = AddStrategyToAll
 StrategyView = findViewByName("allStrategy", gPaint.views)
 with sqlite3.connect(DB_PATH) as db:
 	cursor = db.execute("SELECT * FROM strategy")
-	results = cursor.fetchall()  # 获取单行数据
+	results = cursor.fetchall() 
 	print(results)
 	for result in results:
 		x = StrategyView.size.cx
