@@ -522,7 +522,7 @@ renderFaceCat(gPaint, xml)
 control_panel = findViewByName("control", gPaint.views)
 addButton = FCButton()
 addButton.text = "添加策略"
-addButton.location = FCPoint(100,200)
+addButton.location = FCPoint(50,200)
 addViewToParent(addButton,  control_panel)
 addButton.onClick = AddStrategyToAll
 # 绘制策略图层

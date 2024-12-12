@@ -1,6 +1,7 @@
 from facecat import *
 import sqlite3
 from . import Strategy
+
 #绘制买卖档
 #view:视图
 #paint:绘图对象
@@ -11,17 +12,21 @@ def drawControlPanel(view, paint, clipRect):
 
 def AddStrategyToAll(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
 	print("添加一个策略")
+	strategy_id = str(int(time.time()))
 	conn = sqlite3.connect('data/user.db')
 	cur = conn.cursor()
 	cur.execute('''
 	INSERT INTO strategy (wallet,strategy_id, symbol, strategy_type, strategy, strategy_abstract, add_time) 
 	VALUES ( ?, ?, ?, ?, ?, ?, ?)
-	''', ("FWnPy6eH9Y5DbPjui8ojCdwz5gv6WqzSK3hFc5ouct6C","sdssavdgre452", "btcusdt", 0, '{"up_over":"92000","down_under":"88000"}',"涨破100,跌破50", time.time()))
+	''', ("FWnPy6eH9Y5DbPjui8ojCdwz5gv6WqzSK3hFc5ouct6C",strategy_id, "btcusdt", 0, '{"up_over":"92000","down_under":"88000"}',"涨破100,跌破50", time.time()))
 	# 提交更改并关闭连接
 	conn.commit()
-	cursor = cur.execute("SELECT * FROM strategy WHERE strategy_id = ?",("sdssavdgre452",))
+	cursor = cur.execute("SELECT * FROM strategy WHERE strategy_id = ?",(strategy_id,))
 	result = cursor.fetchall() 
 	cur.close()
 	conn.close()
 	strategyDiv = Strategy.StrategyDiv()
 	strategyDiv.strategy = result
+	print(view.parent.parent.views[1].viewName)
+	addViewToParent(strategyDiv, view.parent.parent.views[1])
+	Strategy.ChangeLocation(view.parent.parent.views[1].views, view.parent.parent.size.cx)
