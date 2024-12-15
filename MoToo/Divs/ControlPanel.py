@@ -6,27 +6,16 @@ from . import Strategy
 #view:视图
 #paint:绘图对象
 #clipRect:区域
-def drawControlPanel(view, paint, clipRect):
-	drawFont = "Default,14"
-	paint.drawText("编辑策略", "rgb(175,196,228)", drawFont, 5,  10)
-
-def AddStrategyToAll(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
-	print("添加一个策略")
-	strategy_id = str(int(time.time()))
-	conn = sqlite3.connect('data/user.db')
-	cur = conn.cursor()
-	cur.execute('''
-	INSERT INTO strategy (wallet,strategy_id, symbol, strategy_type, strategy, strategy_abstract, add_time) 
-	VALUES ( ?, ?, ?, ?, ?, ?, ?)
-	''', ("FWnPy6eH9Y5DbPjui8ojCdwz5gv6WqzSK3hFc5ouct6C",strategy_id, "btcusdt", 0, '{"up_over":"92000","down_under":"88000"}',"涨破100,跌破50", time.time()))
-	# 提交更改并关闭连接
-	conn.commit()
-	cursor = cur.execute("SELECT * FROM strategy WHERE strategy_id = ?",(strategy_id,))
-	result = cursor.fetchall() 
-	cur.close()
-	conn.close()
-	strategyDiv = Strategy.StrategyDiv()
-	strategyDiv.strategy = result
-	print(view.parent.parent.views[1].viewName)
-	addViewToParent(strategyDiv, view.parent.parent.views[1])
-	Strategy.ChangeLocation(view.parent.parent.views[1].views, view.parent.parent.size.cx)
+def drawControlPanel(view, paint, strategy, clipRect):
+	paint.drawText("编辑策略", "rgb(175,196,228)", "Default,18", 45,  10)
+	if strategy == []:
+		x = view.size.cx
+	else:
+		print(strategy)
+		drawFont = "Default,14"
+		paint.drawText((strategy[2].upper()), "rgb(175,196,228)", drawFont, 5,  22 + 20 )
+		if strategy[4] == 0:
+			paint.drawText("策略类型", "rgb(175,196,228)", drawFont, 5,  22 + 40 )
+			paint.drawText("价格破位", "rgb(175,196,228)", drawFont, 75,  22 + 40 )
+		# for i in range(0, len(strategy)):
+		# 	paint.drawText(str(strategy[i]), "rgb(175,196,228)", drawFont, 5,  22 + 20 * i)

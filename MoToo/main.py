@@ -13,7 +13,7 @@ from datetime import datetime
 current_directory = os.getcwd()
 DB_PATH = f'{current_directory}/data/user.db' 
 latestDataStr = ""
-
+current_strategy = []
 
 #开始Http请求
 #url:地址
@@ -35,6 +35,23 @@ def startHttpRequest(url, callBack, tag):
 	data.tag = tag
 	gPaint.addData(data)
 	user32.PostMessageW(gPaint.hWnd, 0x0401, 0, 0)
+#开始sql请求
+#calBack回调
+def startSqlRequest(callBack, tag):
+	data = FCData()
+	data.callBack = callBack
+	try:
+		with sqlite3.connect(DB_PATH) as db:
+			cursor = db.execute("SELECT * FROM strategy")
+			results = cursor.fetchall() 
+			data.success = True
+			data.data = results
+	except Exception as e:
+		data.success = False
+		data.data = str(e)
+	data.tag = tag
+	gPaint.addData(data)
+	user32.PostMessageW(gPaint.hWnd, 0x0401, 0, 0)
 
 #进行Http请求
 #url:地址
@@ -43,6 +60,11 @@ def httpRequest(url, callBack, tag):
 	thread = threading.Thread(target=startHttpRequest, args=(url, callBack, tag))
 	thread.start()
 
+#进行sql请求
+#callBack回调
+def sqlRequest(callBack, tag):
+	thread = threading.Thread(target=startSqlRequest, args=(callBack, tag))
+	thread.start()
 
 #历史数据回调
 def historyDataCallBack(data):
@@ -257,12 +279,33 @@ def queryPriceCallBack(data):
 		invalidateView(gridStocks)
 
 
+
 #查询报价数据
 def queryPrice(codes):
 	url = "http://110.42.188.197:9968/quote?func=price&count=500&codes=" + codes
 	tag = []
 	httpRequest(url, queryPriceCallBack, tag)
 
+
+#策略数据回调
+def StrategyCallBack(data):
+	global strategyData
+	strategyData = data
+	results = strategyData.data
+	allStrategy = findViewByName("allStrategy", gPaint.views)
+	allStrategy.views = []
+	for result in results:
+		strategyDiv = StrategyDiv()
+		strategyDiv.strategy = result
+		strategyDiv.onClick = onClickStrategyDiv
+		addViewToParent(strategyDiv, allStrategy)
+	ChangeLocation(allStrategy.views, allStrategy.size.cx)
+	invalidate(gPaint)
+
+# 查询策略数据库
+def queryStrategy():
+	tag = []
+	sqlRequest(StrategyCallBack, tag)
 #绘制视图
 #view:视图
 #paint:绘图对象
@@ -271,7 +314,7 @@ def onPaint(view, paint, clipRect):
 	if view.viewType == "latestdiv":
 		drawLatestDiv(view, paint, latestDataStr, clipRect)
 	elif view.viewType == "control":
-		drawControlPanel(view, paint, clipRect)
+		drawControlPanel(view, paint, current_strategy, clipRect)
 	elif view.viewName == "allStrategy":
 		x = view.size.cx
 		ChangeLocation(view.views, x)
@@ -349,7 +392,63 @@ def onClick(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
 		cycleInt = int(strs[2])
 		findMyCharts[index].exAttributes["cycle"] = str(cycleInt)
 		queryHistoryData(findMyCharts[index], charts[index], charts[index].text.split(" ")[0])
-
+	elif view.viewName == "allStrategy":
+		print("点击策略试图")
+		global current_strategy
+		current_strategy = []
+		invalidate(gPaint)
+# 添加策略回调
+def AddStrategyToAll(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
+	print("添加一个策略")
+	strategy_id = str(int(time.time()))
+	conn = sqlite3.connect('data/user.db')
+	cur = conn.cursor()
+	cur.execute('''
+	INSERT INTO strategy (wallet,strategy_id, symbol, strategy_type, strategy, strategy_abstract, add_time) 
+	VALUES ( ?, ?, ?, ?, ?, ?, ?)
+	''', ("FWnPy6eH9Y5DbPjui8ojCdwz5gv6WqzSK3hFc5ouct6C",strategy_id, "btcusdt", 0, '{"up_over":"92000","down_under":"88000"}',"涨破100,跌破50", time.time()))
+	# 提交更改并关闭连接
+	conn.commit()
+	cur.close()
+	conn.close()
+	queryStrategy()
+# 点击策略回调
+def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
+	x = firstPoint.x
+	y = firstPoint.y
+	if clicks == 2:
+		if view.status == "active":
+			view.status = "inactive"
+			view.borderColor = "rgb(255,255,255)"
+		print("编辑策略")
+	elif clicks == 1:
+		print(x)
+		print(y)
+		if 170 < x < 200 and 0 < y < 20:
+			print("删除一个策略")
+			conn = sqlite3.connect('data/user.db')
+			cur = conn.cursor()
+			cur.execute('''
+			DELETE FROM strategy WHERE strategy_id = ?
+			''', (view.strategy[1],)) 
+			conn.commit()
+			cur.close()
+			conn.close()
+			queryStrategy()
+		elif True:
+			control_panel = findViewByName("control", gPaint.views)
+			global current_strategy
+			current_strategy = view.strategy
+			invalidate(gPaint)
+		elif view.status == "inactive":
+			view.borderColor = "rgb(184,255,137)"
+			view.status = "active"
+			print("启动策略")
+		elif view.status == "active":
+			view.borderColor = "rgb(255,255,255)"
+			view.status = "inactive"
+			print("停止策略")
+			
 #创建单元格
 def createGridCell (grid):
 	gridCell = FCGridCell()
@@ -520,23 +619,18 @@ with open(f'{current_directory}\\xml\\mainframe.xml', 'r', encoding='utf-8') as 
 renderFaceCat(gPaint, xml)
 # 绘制控制面板
 control_panel = findViewByName("control", gPaint.views)
-addButton = FCButton()
+addButton = FCTextBox()
+def onPaintTextBox(view, paint, clipRect):
+	paint.gdiPlusPaint.paintView(view.gID, 0, 0, int(view.size.cx), int(view.size.cy))
+	print(f"{view.gID}")
+addButton.onPaint = onPaintTextBox
 addButton.text = "添加策略"
 addButton.location = FCPoint(50,200)
 addViewToParent(addButton,  control_panel)
 addButton.onClick = AddStrategyToAll
 # 绘制策略图层
 StrategyView = findViewByName("allStrategy", gPaint.views)
-with sqlite3.connect(DB_PATH) as db:
-	cursor = db.execute("SELECT * FROM strategy")
-	results = cursor.fetchall() 
-	print(results)
-	for result in results:
-		x = StrategyView.size.cx
-		strategyDiv = StrategyDiv()
-		strategyDiv.strategy = result
-		addViewToParent(strategyDiv, StrategyView)
-	ChangeLocation(StrategyView.views, x)
+queryStrategy()
 
 gridStocks = findViewByName("gridStocks", gPaint.views)
 for i in range(3, len(gridStocks.columns)):

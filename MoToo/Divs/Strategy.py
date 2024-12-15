@@ -38,7 +38,6 @@ class StrategyDiv(FCView):
         self.strategy = {}
         self.viewType = "div" #类型
         self.status = "inactive" # 
-        self.onClick = self.onClickStrategyDiv
         self.size = FCSize(200, 300)
         self.viewType = "strategyDiv"
         self.backColor = "rgb(0,0,0)"
@@ -79,38 +78,6 @@ class StrategyDiv(FCView):
         symbol = self.strategy[2]
         print(symbol)
         ws_client.subscribe(f"{symbol}@avgPrice")
-
-    def onClickStrategyDiv(self, view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
-        print(firstTouch, firstPoint, secondTouch, secondPoint, clicks)
-        x = firstPoint.x
-        y = firstPoint.y
-        if clicks == 2:
-            if view.status == "active":
-                view.status = "inactive"
-                view.borderColor = "rgb(255,255,255)"
-            print("编辑策略")
-        elif clicks == 1:
-            print(x)
-            print(y)
-            if 170 < x < 200 and 0 < y < 20:
-                self.deleteStrategyDiv()
-            elif view.status == "inactive":
-                view.borderColor = "rgb(184,255,137)"
-                view.status = "active"
-                print("启动策略")
-            elif view.status == "active":
-                view.borderColor = "rgb(255,255,255)"
-                view.status = "inactive"
-                print("停止策略")
-    def deleteStrategyDiv(self):
-        conn = sqlite3.connect('data/user.db')
-        cur = conn.cursor()
-        cur.execute('''
-        DELETE FROM strategy WHERE strategy_id = ?
-        ''', (self.strategy[1],)) 
-        conn.commit()
-        cur.close()
-        conn.close()
 
     def onPaintStrategyDiv(self, div, paint, clipRect):
         strategy = div.strategy

@@ -98,8 +98,7 @@
                             </div>
                         </div>
 						<div type="tabpage" text="监控面板" name="monitor_page" backcolor="none">
-                            <div type="splitlayout" layoutstyle="righttoleft" bordercolor="none" dock="fill"
-                                        size="400,400" candragsplitter="true"  splitterposition="200,1" allowresize="false">
+                            <div type="splitlayout" layoutstyle="righttoleft" bordercolor="none" dock="fill" size="400,400" candragsplitter="true"  splitterposition="200,1" allowresize="false">
                                 <div type="custom" cid="control" name="control"/>
                                 <div type="div" name="allStrategy" showhscrollbar="true" showvscrollbar="true" topMost="true">
                                 </div>
