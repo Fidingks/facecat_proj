@@ -420,7 +420,7 @@ def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, c
 		if view.status == "active":
 			view.status = "inactive"
 			view.borderColor = "rgb(255,255,255)"
-		print("编辑策略")
+		print("启动策略")
 	elif clicks == 1:
 		print(x)
 		print(y)
@@ -437,6 +437,10 @@ def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, c
 			queryStrategy()
 		elif True:
 			control_panel = findViewByName("control", gPaint.views)
+			textbox = FCTextBox()
+			textbox.location = FCPoint(50, 300)
+			addViewToParent(textbox, control_panel)
+			textbox.text = "在此输入"
 			global current_strategy
 			current_strategy = view.strategy
 			invalidate(gPaint)
@@ -448,7 +452,7 @@ def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, c
 			view.borderColor = "rgb(255,255,255)"
 			view.status = "inactive"
 			print("停止策略")
-			
+	
 #创建单元格
 def createGridCell (grid):
 	gridCell = FCGridCell()
@@ -619,14 +623,11 @@ with open(f'{current_directory}\\xml\\mainframe.xml', 'r', encoding='utf-8') as 
 renderFaceCat(gPaint, xml)
 # 绘制控制面板
 control_panel = findViewByName("control", gPaint.views)
-addButton = FCTextBox()
-def onPaintTextBox(view, paint, clipRect):
-	paint.gdiPlusPaint.paintView(view.gID, 0, 0, int(view.size.cx), int(view.size.cy))
-	print(f"{view.gID}")
-addButton.onPaint = onPaintTextBox
-addButton.text = "添加策略"
+addButton = FCButton()
+addButton.font = "Default,14"
 addButton.location = FCPoint(50,200)
 addViewToParent(addButton,  control_panel)
+addButton.text = "添加策略"
 addButton.onClick = AddStrategyToAll
 # 绘制策略图层
 StrategyView = findViewByName("allStrategy", gPaint.views)

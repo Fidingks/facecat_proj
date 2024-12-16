@@ -281,7 +281,7 @@ class FCPaint(object):
 	#apt:坐标集合
 	def drawPolyline(self, color, width, style, apt):
 		if len(apt) == 1:
-			self.drawLine(color, width, style, apt[0].x, apt[0].y, apt[0].x, apt[0].y)
+			self.drawLine(color, width, style, apt[0].x, apt[0].y, apt[0].x + 1, apt[0].y)
 			return
 		if len(apt) > 1:
 			strApt = ""
@@ -892,6 +892,7 @@ class FCView(object):
 		self.scrollV = 0 #纵向滚动
 		self.scrollH = 0 #横向滚动
 		self.scrollSize = 8 #滚动条的大小
+		self.selectedBackColor = "none" #选中的颜色
 		self.showHScrollBar = False #是否显示横向滚动条
 		self.showVScrollBar = False #是否显示横向滚动条
 		self.scrollBarColor = "rgb(200,200,200)" #滚动条的颜色
@@ -905,6 +906,7 @@ class FCView(object):
 		self.tabStop = False #是否支持Tab
 		self._text = "" #文字
 		self._textColor = "rgb(0,0,0)" #前景色
+		self.textAlign = "middleleft" #文字位置
 		self.topMost = False #是否置顶
 		self.touchDownTime = 0 #鼠标按下的时间
 		self.verticalAlign = "top" #纵向布局
@@ -1248,6 +1250,7 @@ class FCChart(FCView):
 		self.allowDragScroll = True #是否允许拖动滚动
 		self.autoFillHScale = False #是否填充满X轴
 		self.allowDragChartDiv = False #是否允许拖拽图层
+		self.allowSelectShape = False #是否允许选中线条
 		self.candleMax = 0 #蜡烛线的最大值
 		self.candleMin = 0 #蜡烛线的最小值
 		self.candleMaxRight = 0 #蜡烛线的右轴最大值
@@ -1332,6 +1335,7 @@ class FCChart(FCView):
 		self.firstOpen = 0
 		self.hScaleTextColor = "none" #横轴的文字颜色
 		self.vScaleTextColor = "none" #纵轴的文字颜色
+		self.volColor = "none" #成交量的颜色
 		self.closearr = []
 		self.allema12 = []
 		self.allema26 = []
@@ -1407,6 +1411,8 @@ class FCChart(FCView):
 		self.onPaintChartStock = None #绘制图表回调
 		self.onPaintChartPlot = None #绘制画线回调
 		self.onPaintChartCrossLine = None #绘制十字线回调
+		self.getChartTitles = None #绘制标题
+		self.onPaintChartTip = None #绘制提示
 
 #日期按钮
 class DayButton(object):
@@ -1934,14 +1940,14 @@ def clickRadioButton(radioButton, mp):
 #clipRect:裁剪区域
 def drawButton(button, paint, clipRect):
 	#鼠标按下
-	if button == paint.touchDownView:
+	if button.viewType != "tabbutton" and button == paint.touchDownView:
 		if button.pushedColor != "none":
 			paint.fillRoundRect(button.pushedColor, 0, 0, button.size.cx, button.size.cy, button.cornerRadius)
 		else:
 			if button.backColor != "none":
 				paint.fillRoundRect(button.backColor, 0, 0, button.size.cx, button.size.cy, button.cornerRadius)
 	#鼠标悬停
-	elif button == paint.touchMoveView:
+	elif button.viewType != "tabbutton" and button == paint.touchMoveView:
 		if button.hoveredColor != "none":
 			paint.fillRoundRect(button.hoveredColor, 0, 0, button.size.cx, button.size.cy, button.cornerRadius)
 		else:
@@ -1949,7 +1955,17 @@ def drawButton(button, paint, clipRect):
 				paint.fillRoundRect(button.backColor, 0, 0, button.size.cx, button.size.cy, button.cornerRadius)
 	#常规情况
 	elif button.backColor != "none":
-		paint.fillRoundRect(button.backColor, 0, 0, button.size.cx, button.size.cy, button.cornerRadius)
+		selected = False
+		if button.viewType == "tabbutton":
+			tabView = button.parent
+			for i in range(0, len(tabView.tabPages)):
+				if tabView.tabPages[i].visible and tabView.tabPages[i].headerButton == button:
+					selected = True
+					break
+		if selected and button.selectedBackColor != "none":
+			paint.fillRoundRect(button.selectedBackColor, 0, 0, button.size.cx, button.size.cy, button.cornerRadius)
+		else:
+			paint.fillRoundRect(button.backColor, 0, 0, button.size.cx, button.size.cy, button.cornerRadius)
 	#绘制文字
 	if button.textColor != "none" and len(button.text) > 0:
 		tSize = paint.textSize(button.text, button.font)
@@ -2422,6 +2438,35 @@ def resetLayoutDiv(layout):
 			vPos = vPos + 1
 			i = i + 1
 	return reset
+
+#添加视图到分割层
+#splitDiv 分割层
+#firstView 第一个视图
+#secondView 第二个视图
+#pos 位置
+def addViewToSplit(splitDiv, firstView, secondView, pos):
+	size = splitDiv.size
+	splitDiv.oldSize = FCSize(size.cx, size.cy)
+	addViewToParent(firstView, splitDiv)
+	addViewToParent(secondView, splitDiv)
+	splitDiv.firstView = firstView
+	splitDiv.secondView = secondView
+	splitter = FCView()
+	splitter.parent = splitDiv
+	if splitDiv.paint.defaultUIStyle == "dark":
+		splitter.backColor = "rgb(75,75,75)"
+	elif splitDiv.paint.defaultUIStyle == "light":
+		splitter.backColor = "rgb(150,150,150)"
+	splitter.borderColor = "none"
+	splitter.paint = splitDiv.paint
+	splitDiv.views.append(splitter)
+	splitDiv.splitter = splitter
+	if splitDiv.layoutStyle == "lefttoright" or splitDiv.layoutStyle == "righttoleft":
+		splitter.size = FCSize(1, size.cy)
+		splitter.location = FCPoint(pos, 0)
+	else:
+		splitter.size = FCSize(size.cx, 1)
+		splitter.location = FCPoint(0, pos)
 
 #重置分割线的布局
 #split:分割视图
@@ -3411,7 +3456,11 @@ def hideOrShowTreeNode(node, visible):
 	if len(node.childNodes) > 0:
 		for i in range(0,len(node.childNodes)):
 			node.childNodes[i].row.visible = visible
-			hideOrShowTreeNode(node.childNodes[i], visible)
+			if visible:
+				if node.childNodes[i].collapsed == False:
+					hideOrShowTreeNode(node.childNodes[i], visible)
+			else:
+				hideOrShowTreeNode(node.childNodes[i], visible)
 #展开树的节点
 #tree:树
 def expendTree(tree):
@@ -6693,7 +6742,7 @@ def touchDownChart(chart, firstTouch, firstPoint, secondTouch, secondPoint):
 	chart.touchDownPoint = mp
 	if chart.datas != None and len(chart.datas) > 0:
 		chart.sPlot = selectPlot(chart, mp)
-		if chart.sPlot == None:
+		if chart.allowSelectShape and chart.sPlot == None:
 			selectShape(chart, mp)
 	if chart.paint.isDoubleClick:
 		if chart.showCrossLine:
@@ -7176,29 +7225,31 @@ def drawChartCrossLine(chart, paint, clipRect):
 	if volDivHeight > 0:
 		drawTitles = []
 		drawColors = []
-		if len(chart.datas) > 0:
-			drawTitles.append("VOL " + toFixed(chart.datas[crossLineIndex].volume / chart.magnitude, chart.volDigit))
-			drawColors.append(chart.textColor)
+		if chart.getChartTitles != None:
+			chart.getChartTitles(chart, 1, drawTitles, drawColors)
 		else:
-			drawTitles.append("VOL")
-			drawColors.append(chart.textColor)
-		if len(chart.shapes) > 0:
-			for i in range(0, len(chart.shapes)):
-				shape = chart.shapes[i]
-				if shape.divIndex == 1:
-					if len(shape.title) > 0:
-						if shape.shapeType == "bar"  and shape.style == "2color":
-							drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.volDigit))
-							drawColors.append(shape.color2)
-						else:
-							if shape.shapeType != "text":
+			if len(chart.datas) > 0:
+				drawTitles.append("VOL " + toFixed(chart.datas[crossLineIndex].volume / chart.magnitude, chart.volDigit))
+				drawColors.append(chart.textColor)
+			else:
+				drawTitles.append("VOL")
+				drawColors.append(chart.textColor)
+			if len(chart.shapes) > 0:
+				for i in range(0, len(chart.shapes)):
+					shape = chart.shapes[i]
+					if shape.divIndex == 1:
+						if len(shape.title) > 0:
+							if shape.shapeType == "bar"  and shape.style == "2color":
 								drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.volDigit))
-								drawColors.append(shape.color)
-								if len(shape.datas2) > 0:
-									drawTitles.append(shape.title2 + " " + toFixed(shape.datas2[crossLineIndex], chart.volDigit))
-									drawColors.append(shape.color2)
-						
-					
+								drawColors.append(shape.color2)
+							else:
+								if shape.shapeType != "text":
+									drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.volDigit))
+									drawColors.append(shape.color)
+									if len(shape.datas2) > 0:
+										drawTitles.append(shape.title2 + " " + toFixed(shape.datas2[crossLineIndex], chart.volDigit))
+										drawColors.append(shape.color2)
+								
 		iLeft = chart.leftVScaleWidth + 5
 		for i in range(0,len(drawTitles)):
 			tSize = paint.textSize(drawTitles[i], chart.font)
@@ -7207,25 +7258,28 @@ def drawChartCrossLine(chart, paint, clipRect):
 	if chart.cycle == "trend":
 		drawTitles = []
 		drawColors = []
-		if len(chart.text) > 0:
-			drawTitles.append(chart.text)
-			drawColors.append(chart.textColor)
-		iLeft = chart.leftVScaleWidth + 5
-		if len(chart.shapes) > 0:
-			for i in range(0, len(chart.shapes)):
-				shape = chart.shapes[i]
-				if shape.divIndex == 0:
-					if len(shape.title) > 0:
-						if shape.shapeType == "bar"  and shape.style == "2color":
-							drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.candleDigit))
-							drawColors.append(shape.color2)
-						else:
-							if shape.shapeType != "text":
+		if chart.getChartTitles != None:
+			chart.getChartTitles(chart, 0, drawTitles, drawColors)
+		else:
+			if len(chart.text) > 0:
+				drawTitles.append(chart.text)
+				drawColors.append(chart.textColor)
+			iLeft = chart.leftVScaleWidth + 5
+			if len(chart.shapes) > 0:
+				for i in range(0, len(chart.shapes)):
+					shape = chart.shapes[i]
+					if shape.divIndex == 0:
+						if len(shape.title) > 0:
+							if shape.shapeType == "bar"  and shape.style == "2color":
 								drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.candleDigit))
-								drawColors.append(shape.color)
-								if len(shape.datas2) > 0:
-									drawTitles.append(shape.title2 + " " + toFixed(shape.datas2[crossLineIndex], chart.candleDigit))
-									drawColors.append(shape.color2)
+								drawColors.append(shape.color2)
+							else:
+								if shape.shapeType != "text":
+									drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.candleDigit))
+									drawColors.append(shape.color)
+									if len(shape.datas2) > 0:
+										drawTitles.append(shape.title2 + " " + toFixed(shape.datas2[crossLineIndex], chart.candleDigit))
+										drawColors.append(shape.color2)
 		for i in range(0,len(drawTitles)):
 			tSize = paint.textSize(drawTitles[i], chart.font)
 			paint.drawText(drawTitles[i], drawColors[i], chart.font, iLeft, 5)
@@ -7233,71 +7287,74 @@ def drawChartCrossLine(chart, paint, clipRect):
 	else:
 		drawTitles = []
 		drawColors = []
-		if len(chart.text) > 0:
-			drawTitles.append(chart.text)
-			drawColors.append(chart.textColor)
-		if chart.mainIndicator == "MA":
-			if len(chart.ma5) > 0:
-				drawTitles.append("MA5 " + toFixed(chart.ma5[crossLineIndex], chart.candleDigit))
-			else:
-				drawTitles.append("MA5")
-			drawColors.append(chart.indicatorColors[0])
-			if len(chart.ma10) > 0:
-				drawTitles.append("MA10 " + toFixed(chart.ma10[crossLineIndex], chart.candleDigit))
-			else:
-				drawTitles.append("MA10")
-			drawColors.append(chart.indicatorColors[1])
-			if len(chart.ma20) > 0:
-				drawTitles.append("MA20 " + toFixed(chart.ma20[crossLineIndex], chart.candleDigit))
-			else:
-				drawTitles.append("MA20")
-			drawColors.append(chart.indicatorColors[2])
-			if len(chart.ma30) > 0:
-				drawTitles.append("MA30 " + toFixed(chart.ma30[crossLineIndex], chart.candleDigit))
-			else:
-				drawTitles.append("MA30")
-			drawColors.append(chart.indicatorColors[5])
-			if len(chart.ma120) > 0:
-				drawTitles.append("MA120 " + toFixed(chart.ma120[crossLineIndex], chart.candleDigit))
-			else:
-				drawTitles.append("MA120")
-			drawColors.append(chart.indicatorColors[4])
-			if len(chart.ma250) > 0:
-				drawTitles.append("MA250 " + toFixed(chart.ma250[crossLineIndex], chart.candleDigit))
-			else:
-				drawTitles.append("MA250")
-			drawColors.append(chart.indicatorColors[3])
-		elif chart.mainIndicator == "BOLL":
-			if len(chart.boll_mid) > 0:
-				drawTitles.append("MID " + toFixed(chart.boll_mid[crossLineIndex], chart.candleDigit))
-			else:
-				drawTitles.append("MID")
-			drawColors.append(chart.indicatorColors[0])
-			if len(chart.boll_up) > 0:
-				drawTitles.append("UP " + toFixed(chart.boll_up[crossLineIndex], chart.candleDigit))
-			else:
-				drawTitles.append("UP")
-			drawColors.append(chart.indicatorColors[1])
-			if len(chart.boll_down) > 0:
-				drawTitles.append("LOW " + toFixed(chart.boll_down[crossLineIndex], chart.candleDigit))
-			else:
-				drawTitles.append("LOW")
-			drawColors.append(chart.indicatorColors[2])
-		if len(chart.shapes) > 0:
-			for i in range(0, len(chart.shapes)):
-				shape = chart.shapes[i]
-				if shape.divIndex == 0:
-					if len(shape.title) > 0:
-						if shape.shapeType == "bar" and shape.style == "2color":
-							drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.candleDigit))
-							drawColors.append(shape.color2)
-						else:
-							if shape.shapeType != "text":
+		if chart.getChartTitles != None:
+			chart.getChartTitles(chart, 0, drawTitles, drawColors)
+		else:
+			if len(chart.text) > 0:
+				drawTitles.append(chart.text)
+				drawColors.append(chart.textColor)
+			if chart.mainIndicator == "MA":
+				if len(chart.ma5) > 0:
+					drawTitles.append("MA5 " + toFixed(chart.ma5[crossLineIndex], chart.candleDigit))
+				else:
+					drawTitles.append("MA5")
+				drawColors.append(chart.indicatorColors[0])
+				if len(chart.ma10) > 0:
+					drawTitles.append("MA10 " + toFixed(chart.ma10[crossLineIndex], chart.candleDigit))
+				else:
+					drawTitles.append("MA10")
+				drawColors.append(chart.indicatorColors[1])
+				if len(chart.ma20) > 0:
+					drawTitles.append("MA20 " + toFixed(chart.ma20[crossLineIndex], chart.candleDigit))
+				else:
+					drawTitles.append("MA20")
+				drawColors.append(chart.indicatorColors[2])
+				if len(chart.ma30) > 0:
+					drawTitles.append("MA30 " + toFixed(chart.ma30[crossLineIndex], chart.candleDigit))
+				else:
+					drawTitles.append("MA30")
+				drawColors.append(chart.indicatorColors[5])
+				if len(chart.ma120) > 0:
+					drawTitles.append("MA120 " + toFixed(chart.ma120[crossLineIndex], chart.candleDigit))
+				else:
+					drawTitles.append("MA120")
+				drawColors.append(chart.indicatorColors[4])
+				if len(chart.ma250) > 0:
+					drawTitles.append("MA250 " + toFixed(chart.ma250[crossLineIndex], chart.candleDigit))
+				else:
+					drawTitles.append("MA250")
+				drawColors.append(chart.indicatorColors[3])
+			elif chart.mainIndicator == "BOLL":
+				if len(chart.boll_mid) > 0:
+					drawTitles.append("MID " + toFixed(chart.boll_mid[crossLineIndex], chart.candleDigit))
+				else:
+					drawTitles.append("MID")
+				drawColors.append(chart.indicatorColors[0])
+				if len(chart.boll_up) > 0:
+					drawTitles.append("UP " + toFixed(chart.boll_up[crossLineIndex], chart.candleDigit))
+				else:
+					drawTitles.append("UP")
+				drawColors.append(chart.indicatorColors[1])
+				if len(chart.boll_down) > 0:
+					drawTitles.append("LOW " + toFixed(chart.boll_down[crossLineIndex], chart.candleDigit))
+				else:
+					drawTitles.append("LOW")
+				drawColors.append(chart.indicatorColors[2])
+			if len(chart.shapes) > 0:
+				for i in range(0, len(chart.shapes)):
+					shape = chart.shapes[i]
+					if shape.divIndex == 0:
+						if len(shape.title) > 0:
+							if shape.shapeType == "bar" and shape.style == "2color":
 								drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.candleDigit))
-								drawColors.append(shape.color)
-								if len(shape.datas2) > 0:
-									drawTitles.append(shape.title2 + " " + toFixed(shape.datas2[crossLineIndex], chart.candleDigit))
-									drawColors.append(shape.color2)
+								drawColors.append(shape.color2)
+							else:
+								if shape.shapeType != "text":
+									drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.candleDigit))
+									drawColors.append(shape.color)
+									if len(shape.datas2) > 0:
+										drawTitles.append(shape.title2 + " " + toFixed(shape.datas2[crossLineIndex], chart.candleDigit))
+										drawColors.append(shape.color2)
 		iLeft = chart.leftVScaleWidth + 5
 		for i in range(0, len(drawTitles)):
 			tSize = paint.textSize(drawTitles[i], chart.font)
@@ -7306,141 +7363,144 @@ def drawChartCrossLine(chart, paint, clipRect):
 	if indDivHeight > 0:
 		drawTitles = []
 		drawColors = []
-		if chart.showIndicator == "MACD":
-			if len(chart.alldifarr) > 0:
-				drawTitles.append("DIF " + toFixed(chart.alldifarr[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("DIF")
-			drawColors.append(chart.indicatorColors[0])
-			if len(chart.alldeaarr) > 0:
-				drawTitles.append("DEA " + toFixed(chart.alldeaarr[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("DEA")
-			drawColors.append(chart.indicatorColors[1])
-			if len(chart.allmacdarr) > 0:
-				drawTitles.append("MACD " + toFixed(chart.allmacdarr[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("MACD")
-			drawColors.append(chart.indicatorColors[4])
-		elif chart.showIndicator == "KDJ":
-			if len(chart.kdj_k) > 0:
-				drawTitles.append("K " + toFixed(chart.kdj_k[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("K")
-			drawColors.append(chart.indicatorColors[0])
-			if len(chart.kdj_d) > 0:
-				drawTitles.append("D " + toFixed(chart.kdj_d[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("D")
-			drawColors.append(chart.indicatorColors[1])
-			if len(chart.kdj_j) > 0:
-				drawTitles.append("J " + toFixed(chart.kdj_j[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("J")
-			drawColors.append(chart.indicatorColors[2])
-		elif chart.showIndicator == "RSI":
-			if len(chart.rsi1) > 0:
-				drawTitles.append("RSI6 " + toFixed(chart.rsi1[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("RSI6")
-			drawColors.append(chart.indicatorColors[5])
-			if len(chart.rsi2) > 0:
-				drawTitles.append("RSI12 " + toFixed(chart.rsi2[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("RSI12")
-			drawColors.append(chart.indicatorColors[1])
-			if len(chart.rsi3) > 0:
-				drawTitles.append("RSI24 " + toFixed(chart.rsi3[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("RSI24")
-			drawColors.append(chart.indicatorColors[2])
-		elif chart.showIndicator == "BIAS":
-			if len(chart.bias1) > 0:
-				drawTitles.append("BIAS6 " + toFixed(chart.bias1[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("BIAS6")
-			drawColors.append(chart.indicatorColors[5])
-			if len(chart.bias2) > 0:
-				drawTitles.append("BIAS12 " + toFixed(chart.bias2[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("BIAS12")
-			drawColors.append(chart.indicatorColors[1])
-			if len(chart.bias3) > 0:
-				drawTitles.append("BIAS24 " + toFixed(chart.bias3[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("BIAS24")
-			drawColors.append(chart.indicatorColors[2])
-		elif chart.showIndicator == "ROC":
-			if len(chart.roc) > 0:
-				drawTitles.append("ROC " + toFixed(chart.roc[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("ROC")
-			drawColors.append(chart.indicatorColors[0])
-			if len(chart.roc_ma) > 0:
-				drawTitles.append("ROCMA " + toFixed(chart.roc_ma[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("ROCMA")
-			drawColors.append(chart.indicatorColors[1])       
-		elif chart.showIndicator == "WR":
-			if len(chart.wr1) > 0:
-				drawTitles.append("WR5 " + toFixed(chart.wr1[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("WR5")
-			drawColors.append(chart.indicatorColors[0])
-			if len(chart.wr2) > 0:
-				drawTitles.append("WR10 " + toFixed(chart.wr2[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("WR10")
-			drawColors.append(chart.indicatorColors[1])
-		elif chart.showIndicator == "CCI":
-			if len(chart.cci) > 0:
-				drawTitles.append("CCI " + toFixed(chart.cci[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("CCI")
-			drawColors.append(chart.indicatorColors[0])
-		elif chart.showIndicator == "BBI":
-			if len(chart.bbi) > 0:
-				drawTitles.append("BBI " + toFixed(chart.bbi[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("BBI")
-			drawColors.append(chart.indicatorColors[0])
-		elif chart.showIndicator == "TRIX":
-			if len(chart.trix) > 0:
-				drawTitles.append("TRIX " + toFixed(chart.trix[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("TRIX")
-			drawColors.append(chart.indicatorColors[0])
-			if len(chart.trix_ma) > 0:
-				drawTitles.append("TRIXMA " + toFixed(chart.trix_ma[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("TRIXMA")
-			drawColors.append(chart.indicatorColors[1])
-		elif chart.showIndicator == "DMA":
-			if len(chart.dma1) > 0:
-				drawTitles.append("MA10 " + toFixed(chart.dma1[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("MA10")
-			drawColors.append(chart.indicatorColors[0])
-			if len(chart.dma2) > 0:
-				drawTitles.append("MA50 " + toFixed(chart.dma2[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("MA50")
-			drawColors.append(chart.indicatorColors[1])
-		if len(chart.shapes) > 0:
-			for i in range(0, len(chart.shapes)):
-				shape = chart.shapes[i]
-				if shape.divIndex == 2:
-					if len(shape.title) > 0:
-						if shape.shapeType == "bar"  and shape.style == "2color":
-							drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.indDigit))
-							drawColors.append(shape.color2)
-						else:
-							if shape.shapeType != "text":
+		if chart.getChartTitles != None:
+			chart.getChartTitles(chart, 2, drawTitles, drawColors)
+		else:
+			if chart.showIndicator == "MACD":
+				if len(chart.alldifarr) > 0:
+					drawTitles.append("DIF " + toFixed(chart.alldifarr[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("DIF")
+				drawColors.append(chart.indicatorColors[0])
+				if len(chart.alldeaarr) > 0:
+					drawTitles.append("DEA " + toFixed(chart.alldeaarr[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("DEA")
+				drawColors.append(chart.indicatorColors[1])
+				if len(chart.allmacdarr) > 0:
+					drawTitles.append("MACD " + toFixed(chart.allmacdarr[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("MACD")
+				drawColors.append(chart.indicatorColors[4])
+			elif chart.showIndicator == "KDJ":
+				if len(chart.kdj_k) > 0:
+					drawTitles.append("K " + toFixed(chart.kdj_k[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("K")
+				drawColors.append(chart.indicatorColors[0])
+				if len(chart.kdj_d) > 0:
+					drawTitles.append("D " + toFixed(chart.kdj_d[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("D")
+				drawColors.append(chart.indicatorColors[1])
+				if len(chart.kdj_j) > 0:
+					drawTitles.append("J " + toFixed(chart.kdj_j[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("J")
+				drawColors.append(chart.indicatorColors[2])
+			elif chart.showIndicator == "RSI":
+				if len(chart.rsi1) > 0:
+					drawTitles.append("RSI6 " + toFixed(chart.rsi1[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("RSI6")
+				drawColors.append(chart.indicatorColors[5])
+				if len(chart.rsi2) > 0:
+					drawTitles.append("RSI12 " + toFixed(chart.rsi2[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("RSI12")
+				drawColors.append(chart.indicatorColors[1])
+				if len(chart.rsi3) > 0:
+					drawTitles.append("RSI24 " + toFixed(chart.rsi3[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("RSI24")
+				drawColors.append(chart.indicatorColors[2])
+			elif chart.showIndicator == "BIAS":
+				if len(chart.bias1) > 0:
+					drawTitles.append("BIAS6 " + toFixed(chart.bias1[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("BIAS6")
+				drawColors.append(chart.indicatorColors[5])
+				if len(chart.bias2) > 0:
+					drawTitles.append("BIAS12 " + toFixed(chart.bias2[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("BIAS12")
+				drawColors.append(chart.indicatorColors[1])
+				if len(chart.bias3) > 0:
+					drawTitles.append("BIAS24 " + toFixed(chart.bias3[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("BIAS24")
+				drawColors.append(chart.indicatorColors[2])
+			elif chart.showIndicator == "ROC":
+				if len(chart.roc) > 0:
+					drawTitles.append("ROC " + toFixed(chart.roc[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("ROC")
+				drawColors.append(chart.indicatorColors[0])
+				if len(chart.roc_ma) > 0:
+					drawTitles.append("ROCMA " + toFixed(chart.roc_ma[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("ROCMA")
+				drawColors.append(chart.indicatorColors[1])       
+			elif chart.showIndicator == "WR":
+				if len(chart.wr1) > 0:
+					drawTitles.append("WR5 " + toFixed(chart.wr1[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("WR5")
+				drawColors.append(chart.indicatorColors[0])
+				if len(chart.wr2) > 0:
+					drawTitles.append("WR10 " + toFixed(chart.wr2[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("WR10")
+				drawColors.append(chart.indicatorColors[1])
+			elif chart.showIndicator == "CCI":
+				if len(chart.cci) > 0:
+					drawTitles.append("CCI " + toFixed(chart.cci[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("CCI")
+				drawColors.append(chart.indicatorColors[0])
+			elif chart.showIndicator == "BBI":
+				if len(chart.bbi) > 0:
+					drawTitles.append("BBI " + toFixed(chart.bbi[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("BBI")
+				drawColors.append(chart.indicatorColors[0])
+			elif chart.showIndicator == "TRIX":
+				if len(chart.trix) > 0:
+					drawTitles.append("TRIX " + toFixed(chart.trix[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("TRIX")
+				drawColors.append(chart.indicatorColors[0])
+				if len(chart.trix_ma) > 0:
+					drawTitles.append("TRIXMA " + toFixed(chart.trix_ma[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("TRIXMA")
+				drawColors.append(chart.indicatorColors[1])
+			elif chart.showIndicator == "DMA":
+				if len(chart.dma1) > 0:
+					drawTitles.append("MA10 " + toFixed(chart.dma1[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("MA10")
+				drawColors.append(chart.indicatorColors[0])
+				if len(chart.dma2) > 0:
+					drawTitles.append("MA50 " + toFixed(chart.dma2[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("MA50")
+				drawColors.append(chart.indicatorColors[1])
+			if len(chart.shapes) > 0:
+				for i in range(0, len(chart.shapes)):
+					shape = chart.shapes[i]
+					if shape.divIndex == 2:
+						if len(shape.title) > 0:
+							if shape.shapeType == "bar"  and shape.style == "2color":
 								drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.indDigit))
-								drawColors.append(shape.color)
-								if len(shape.datas2) > 0:
-									drawTitles.append(shape.title2 + " " + toFixed(shape.datas2[crossLineIndex], chart.indDigit))
-									drawColors.append(shape.color2)
+								drawColors.append(shape.color2)
+							else:
+								if shape.shapeType != "text":
+									drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.indDigit))
+									drawColors.append(shape.color)
+									if len(shape.datas2) > 0:
+										drawTitles.append(shape.title2 + " " + toFixed(shape.datas2[crossLineIndex], chart.indDigit))
+										drawColors.append(shape.color2)
 		iLeft = chart.leftVScaleWidth + 5
 		for i in range(0,len(drawTitles)):
 			tSize = paint.textSize(drawTitles[i], chart.font)
@@ -7449,141 +7509,144 @@ def drawChartCrossLine(chart, paint, clipRect):
 	if indDivHeight2 > 0:
 		drawTitles = []
 		drawColors = []
-		if chart.showIndicator2 == "MACD":
-			if len(chart.alldifarr) > 0:
-				drawTitles.append("DIF " + toFixed(chart.alldifarr[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("DIF")
-			drawColors.append(chart.indicatorColors[0])
-			if len(chart.alldeaarr) > 0:
-				drawTitles.append("DEA " + toFixed(chart.alldeaarr[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("DEA")
-			drawColors.append(chart.indicatorColors[1])
-			if len(chart.allmacdarr) > 0:
-				drawTitles.append("MACD " + toFixed(chart.allmacdarr[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("MACD")
-			drawColors.append(chart.indicatorColors[4])
-		elif chart.showIndicator2 == "KDJ":
-			if len(chart.kdj_k) > 0:
-				drawTitles.append("K " + toFixed(chart.kdj_k[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("K")
-			drawColors.append(chart.indicatorColors[0])
-			if len(chart.kdj_d) > 0:
-				drawTitles.append("D " + toFixed(chart.kdj_d[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("D")
-			drawColors.append(chart.indicatorColors[1])
-			if len(chart.kdj_j) > 0:
-				drawTitles.append("J " + toFixed(chart.kdj_j[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("J")
-			drawColors.append(chart.indicatorColors[2])
-		elif chart.showIndicator2 == "RSI":
-			if len(chart.rsi1) > 0:
-				drawTitles.append("RSI6 " + toFixed(chart.rsi1[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("RSI6")
-			drawColors.append(chart.indicatorColors[5])
-			if len(chart.rsi2) > 0:
-				drawTitles.append("RSI12 " + toFixed(chart.rsi2[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("RSI12")
-			drawColors.append(chart.indicatorColors[1])
-			if len(chart.rsi3) > 0:
-				drawTitles.append("RSI24 " + toFixed(chart.rsi3[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("RSI24")
-			drawColors.append(chart.indicatorColors[2])
-		elif chart.showIndicator2 == "BIAS":
-			if len(chart.bias1) > 0:
-				drawTitles.append("BIAS6 " + toFixed(chart.bias1[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("BIAS6")
-			drawColors.append(chart.indicatorColors[5])
-			if len(chart.bias2) > 0:
-				drawTitles.append("BIAS12 " + toFixed(chart.bias2[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("BIAS12")
-			drawColors.append(chart.indicatorColors[1])
-			if len(chart.bias3) > 0:
-				drawTitles.append("BIAS24 " + toFixed(chart.bias3[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("BIAS24")
-			drawColors.append(chart.indicatorColors[2])
-		elif chart.showIndicator2 == "ROC":
-			if len(chart.roc) > 0:
-				drawTitles.append("ROC " + toFixed(chart.roc[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("ROC")
-			drawColors.append(chart.indicatorColors[0])
-			if len(chart.roc_ma) > 0:
-				drawTitles.append("ROCMA " + toFixed(chart.roc_ma[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("ROCMA")
-			drawColors.append(chart.indicatorColors[1])       
-		elif chart.showIndicator2 == "WR":
-			if len(chart.wr1) > 0:
-				drawTitles.append("WR5 " + toFixed(chart.wr1[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("WR5")
-			drawColors.append(chart.indicatorColors[0])
-			if len(chart.wr2) > 0:
-				drawTitles.append("WR10 " + toFixed(chart.wr2[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("WR10")
-			drawColors.append(chart.indicatorColors[1])
-		elif chart.showIndicator2 == "CCI":
-			if len(chart.cci) > 0:
-				drawTitles.append("CCI " + toFixed(chart.cci[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("CCI")
-			drawColors.append(chart.indicatorColors[0])
-		elif chart.showIndicator2 == "BBI":
-			if len(chart.bbi) > 0:
-				drawTitles.append("BBI " + toFixed(chart.bbi[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("BBI")
-			drawColors.append(chart.indicatorColors[0])
-		elif chart.showIndicator2 == "TRIX":
-			if len(chart.trix) > 0:
-				drawTitles.append("TRIX " + toFixed(chart.trix[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("TRIX")
-			drawColors.append(chart.indicatorColors[0])
-			if len(chart.trix_ma) > 0:
-				drawTitles.append("TRIXMA " + toFixed(chart.trix_ma[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("TRIXMA")
-			drawColors.append(chart.indicatorColors[1])
-		elif chart.showIndicator2 == "DMA":
-			if len(chart.dma1) > 0:
-				drawTitles.append("MA10 " + toFixed(chart.dma1[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("MA10")
-			drawColors.append(chart.indicatorColors[0])
-			if len(chart.dma2) > 0:
-				drawTitles.append("MA50 " + toFixed(chart.dma2[crossLineIndex], chart.indDigit))
-			else:
-				drawTitles.append("MA50")
-			drawColors.append(chart.indicatorColors[1])
-		if len(chart.shapes) > 0:
-			for i in range(0, len(chart.shapes)):
-				shape = chart.shapes[i]
-				if shape.divIndex == 3:
-					if len(shape.title) > 0:
-						if shape.shapeType == "bar"  and shape.style == "2color":
-							drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.indDigit2))
-							drawColors.append(shape.color2)
-						else:
-							if shape.shapeType != "text":
+		if chart.getChartTitles != None:
+			chart.getChartTitles(chart, 3, drawTitles, drawColors)
+		else:
+			if chart.showIndicator2 == "MACD":
+				if len(chart.alldifarr) > 0:
+					drawTitles.append("DIF " + toFixed(chart.alldifarr[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("DIF")
+				drawColors.append(chart.indicatorColors[0])
+				if len(chart.alldeaarr) > 0:
+					drawTitles.append("DEA " + toFixed(chart.alldeaarr[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("DEA")
+				drawColors.append(chart.indicatorColors[1])
+				if len(chart.allmacdarr) > 0:
+					drawTitles.append("MACD " + toFixed(chart.allmacdarr[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("MACD")
+				drawColors.append(chart.indicatorColors[4])
+			elif chart.showIndicator2 == "KDJ":
+				if len(chart.kdj_k) > 0:
+					drawTitles.append("K " + toFixed(chart.kdj_k[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("K")
+				drawColors.append(chart.indicatorColors[0])
+				if len(chart.kdj_d) > 0:
+					drawTitles.append("D " + toFixed(chart.kdj_d[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("D")
+				drawColors.append(chart.indicatorColors[1])
+				if len(chart.kdj_j) > 0:
+					drawTitles.append("J " + toFixed(chart.kdj_j[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("J")
+				drawColors.append(chart.indicatorColors[2])
+			elif chart.showIndicator2 == "RSI":
+				if len(chart.rsi1) > 0:
+					drawTitles.append("RSI6 " + toFixed(chart.rsi1[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("RSI6")
+				drawColors.append(chart.indicatorColors[5])
+				if len(chart.rsi2) > 0:
+					drawTitles.append("RSI12 " + toFixed(chart.rsi2[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("RSI12")
+				drawColors.append(chart.indicatorColors[1])
+				if len(chart.rsi3) > 0:
+					drawTitles.append("RSI24 " + toFixed(chart.rsi3[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("RSI24")
+				drawColors.append(chart.indicatorColors[2])
+			elif chart.showIndicator2 == "BIAS":
+				if len(chart.bias1) > 0:
+					drawTitles.append("BIAS6 " + toFixed(chart.bias1[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("BIAS6")
+				drawColors.append(chart.indicatorColors[5])
+				if len(chart.bias2) > 0:
+					drawTitles.append("BIAS12 " + toFixed(chart.bias2[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("BIAS12")
+				drawColors.append(chart.indicatorColors[1])
+				if len(chart.bias3) > 0:
+					drawTitles.append("BIAS24 " + toFixed(chart.bias3[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("BIAS24")
+				drawColors.append(chart.indicatorColors[2])
+			elif chart.showIndicator2 == "ROC":
+				if len(chart.roc) > 0:
+					drawTitles.append("ROC " + toFixed(chart.roc[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("ROC")
+				drawColors.append(chart.indicatorColors[0])
+				if len(chart.roc_ma) > 0:
+					drawTitles.append("ROCMA " + toFixed(chart.roc_ma[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("ROCMA")
+				drawColors.append(chart.indicatorColors[1])       
+			elif chart.showIndicator2 == "WR":
+				if len(chart.wr1) > 0:
+					drawTitles.append("WR5 " + toFixed(chart.wr1[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("WR5")
+				drawColors.append(chart.indicatorColors[0])
+				if len(chart.wr2) > 0:
+					drawTitles.append("WR10 " + toFixed(chart.wr2[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("WR10")
+				drawColors.append(chart.indicatorColors[1])
+			elif chart.showIndicator2 == "CCI":
+				if len(chart.cci) > 0:
+					drawTitles.append("CCI " + toFixed(chart.cci[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("CCI")
+				drawColors.append(chart.indicatorColors[0])
+			elif chart.showIndicator2 == "BBI":
+				if len(chart.bbi) > 0:
+					drawTitles.append("BBI " + toFixed(chart.bbi[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("BBI")
+				drawColors.append(chart.indicatorColors[0])
+			elif chart.showIndicator2 == "TRIX":
+				if len(chart.trix) > 0:
+					drawTitles.append("TRIX " + toFixed(chart.trix[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("TRIX")
+				drawColors.append(chart.indicatorColors[0])
+				if len(chart.trix_ma) > 0:
+					drawTitles.append("TRIXMA " + toFixed(chart.trix_ma[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("TRIXMA")
+				drawColors.append(chart.indicatorColors[1])
+			elif chart.showIndicator2 == "DMA":
+				if len(chart.dma1) > 0:
+					drawTitles.append("MA10 " + toFixed(chart.dma1[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("MA10")
+				drawColors.append(chart.indicatorColors[0])
+				if len(chart.dma2) > 0:
+					drawTitles.append("MA50 " + toFixed(chart.dma2[crossLineIndex], chart.indDigit))
+				else:
+					drawTitles.append("MA50")
+				drawColors.append(chart.indicatorColors[1])
+			if len(chart.shapes) > 0:
+				for i in range(0, len(chart.shapes)):
+					shape = chart.shapes[i]
+					if shape.divIndex == 3:
+						if len(shape.title) > 0:
+							if shape.shapeType == "bar"  and shape.style == "2color":
 								drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.indDigit2))
-								drawColors.append(shape.color)
-								if len(shape.datas2) > 0:
-									drawTitles.append(shape.title2 + " " + toFixed(shape.datas2[crossLineIndex], chart.indDigit2))
-									drawColors.append(shape.color2)
+								drawColors.append(shape.color2)
+							else:
+								if shape.shapeType != "text":
+									drawTitles.append(shape.title + " " + toFixed(shape.datas[crossLineIndex], chart.indDigit2))
+									drawColors.append(shape.color)
+									if len(shape.datas2) > 0:
+										drawTitles.append(shape.title2 + " " + toFixed(shape.datas2[crossLineIndex], chart.indDigit2))
+										drawColors.append(shape.color2)
 			if len(drawTitles) > 0:
 				iLeft = chart.leftVScaleWidth + 5
 				for i in range(0,len(drawTitles)):
@@ -7617,7 +7680,7 @@ def drawChartCrossLine(chart, paint, clipRect):
 			drawX = chart.leftVScaleWidth
 		if drawX > chart.size.cx - chart.rightVScaleWidth:
 			drawX = chart.size.cx - chart.rightVScaleWidth
-		if chart.showCrossLine and chart.sPlot == None and chart.selectShape == "":
+		if chart.showCrossLine:
 			paint.fillRect(chart.crossLineColor, chart.leftVScaleWidth, drawY, chart.size.cx - chart.rightVScaleWidth, drawY + chart.lineWidthChart)
 			paint.fillRect(chart.crossLineColor, drawX, 0, drawX + chart.lineWidthChart, chart.size.cy - chart.hScaleHeight)
 		if chart.crossStopIndex != -1 and chart.crossStopIndex < len(chart.datas):
@@ -7737,25 +7800,31 @@ def drawChartStock(chart, paint, clipRect):
 				volY = getChartY(chart, 1, volume)
 				zeroY = getChartY(chart, 1, 0) 
 				if close >= openValue:
+					barColor = chart.upColor
+					if chart.volColor != "none":
+						barColor = chart.volColor
 					if isTrend:
-						paint.fillRect(chart.upColor, x, volY, x + chart.lineWidthChart, zeroY)
+						paint.fillRect(barColor, x, volY, x + chart.lineWidthChart, zeroY)
 					else:
 						if cWidth > 0:
 							if chart.barStyle == "rect2":
 								paint.fillRect(chart.backColor, x - cWidth, volY, x + cWidth + 1, zeroY)
-								paint.drawRect(chart.upColor, 1, 0, x - cWidth, volY, x + cWidth + 1, zeroY)
+								paint.drawRect(barColor, 1, 0, x - cWidth, volY, x + cWidth + 1, zeroY)
 							else:
-								paint.fillRect(chart.upColor, x - cWidth, volY, x + cWidth + 1, zeroY)
+								paint.fillRect(barColor, x - cWidth, volY, x + cWidth + 1, zeroY)
 						else:
-							paint.drawLine(chart.upColor, chart.lineWidthChart, 0, x - cWidth, volY, x + cWidth, zeroY)
+							paint.drawLine(barColor, chart.lineWidthChart, 0, x - cWidth, volY, x + cWidth, zeroY)
 				else:
+					barColor = chart.downColor
+					if chart.volColor != "none":
+						barColor = chart.volColor
 					if isTrend:
-						paint.fillRect(chart.downColor, x, volY, x + chart.lineWidthChart, zeroY)
+						paint.fillRect(barColor, x, volY, x + chart.lineWidthChart, zeroY)
 					else:
 						if cWidth > 0:
-							paint.fillRect(chart.downColor, x - cWidth, volY, x + cWidth + 1, zeroY)
+							paint.fillRect(barColor, x - cWidth, volY, x + cWidth + 1, zeroY)
 						else:
-							paint.drawLine(chart.downColor, chart.lineWidthChart, 0, x - cWidth, volY, x + cWidth, zeroY)
+							paint.drawLine(barColor, chart.lineWidthChart, 0, x - cWidth, volY, x + cWidth, zeroY)
 				if chart.selectShape == "VOL":
 					kPInterval = int(maxVisibleRecord / 30)
 					if kPInterval < 2:
@@ -8016,6 +8085,8 @@ def drawChart(chart, paint, clipRect):
 		paint.onPaintChartCrossLine(chart, paint, clipRect)
 	else:
 		drawChartCrossLine(chart, paint, clipRect)
+	if chart.onPaintChartTip != None:
+		chart.onPaintChartTip(chart, paint, clipRect)
 	if chart.borderColor != "none":
 		paint.drawRect(chart.borderColor, chart.lineWidthChart, 0, 0, 0, chart.size.cx, chart.size.cy)
 
@@ -9597,6 +9668,8 @@ def setAttributeDefault(view, child):
 					view.textColor = value
 				else:
 					view.textColor = "none"
+			elif name == "textalign":
+				view.textAlign = value.lower()
 			elif name == "layoutstyle":
 				view.layoutStyle = value.lower()
 			elif name == "align":
@@ -9800,10 +9873,12 @@ def readXmlNodeDefault(paint, node, parent):
 					tabButton.backColor = "rgb(0,0,0)"
 					tabButton.borderColor = "rgb(100,100,100)"
 					tabButton.textColor = "rgb(255,255,255)"
+					tabButton.selectedBackColor = "rgb(50,50,50)"
 				elif view.paint.defaultUIStyle == "light":
 					tabButton.backColor = "rgb(255,255,255)"
 					tabButton.borderColor = "rgb(150,150,150)"
 					tabButton.textColor = "rgb(0,0,0)"
+					tabButton.selectedBackColor = "rgb(230,230,230)"
 				tabButton.text = view.text
 				tabButton.paint = paint
 				addTabPage(view.parent, view, tabButton)
@@ -10001,7 +10076,15 @@ def onPaintDefault(view, paint, clipRect):
 	elif view.viewType == "label":
 		if view.textColor != "none":
 			tSize = paint.textSize(view.text, view.font)
-			paint.drawText(view.text, view.textColor, view.font, 0, (view.size.cy - tSize.cy) / 2)
+			if len(view.textAlign) > 0:
+				if view.textAlign == "middleleft":
+					paint.drawText(view.text, view.textColor, view.font, 0, (view.size.cy - tSize.cy) / 2)
+				elif view.textAlign == "middlecenter":
+					paint.drawText(view.text, view.textColor, view.font, (view.size.cx - tSize.cx) / 2, (view.size.cy - tSize.cy) / 2)
+				elif view.textAlign == "middleright":
+					paint.drawText(view.text, view.textColor, view.font, view.size.cx - tSize.cx, (view.size.cy - tSize.cy) / 2)
+			else:
+				paint.drawText(view.text, view.textColor, view.font, 0, (view.size.cy - tSize.cy) / 2)
 	elif view.viewType == "div" or view.viewType =="tabpage" or view.viewType =="tabview" or view.viewType =="layout":
 		drawDiv(view, paint, clipRect)
 	elif view.viewType == "calendar":
@@ -10430,6 +10513,21 @@ def renderFaceCat(paint, xml):
 		else:
 			updateViewDefault(paint.views)
 		invalidate(paint)
+
+#加载FaceCat到父视图
+#parent:父视图
+#xml:Xml内容
+def renderFaceCatInParent(parent, xml):
+	paint = parent.paint
+	root  = ET.fromstring(xml)
+	for child in root:
+		if child.tag == "{facecat}body":
+			readXmlNodeDefault(paint, child, parent)
+	if paint.onUpdateView != None:
+		paint.onUpdateView(paint.views)
+	else:
+		updateViewDefault(paint.views)
+	invalidate(paint)
 
 mainWindowHandle = 0 #主窗体句柄
 showWindowState = 0 #显示的窗体状态
