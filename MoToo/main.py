@@ -1,6 +1,7 @@
 # -*- coding:utf-8 -*-
 #! python3
 from facecat import *
+import json
 #这里可能需要pip install requests
 import requests
 import sqlite3
@@ -396,6 +397,7 @@ def onClick(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
 		print("点击策略试图")
 		global current_strategy
 		current_strategy = []
+		drawControlPanelDefault(current_strategy)
 		invalidate(gPaint)
 # 添加策略回调
 def AddStrategyToAll(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
@@ -412,6 +414,35 @@ def AddStrategyToAll(view, firstTouch, firstPoint, secondTouch, secondPoint, cli
 	cur.close()
 	conn.close()
 	queryStrategy()
+
+def ChangeStrategy(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
+	control_panel = view.parent
+	symbol = control_panel.views[1].text
+	strategy_type = control_panel.views[2].text
+	strategy_id = control_panel.views[10].viewName
+	strategy_abstract = control_panel.views[4].text
+	up_over = control_panel.views[5].text
+	down_under = control_panel.views[6].text
+	notify_interval_time =  control_panel.views[7].text
+	strategy = json.dumps({"up_over":up_over, "down_under":down_under})
+	print("提交策略更改到数据库")
+	conn = sqlite3.connect('data/user.db')
+	cur = conn.cursor()
+	cur.execute('''UPDATE strategy SET symbol = ?, strategy_type = ?, strategy_abstract = ? ,strategy = ?,notify_interval_time = ?  WHERE strategy_id = ?''', (
+		symbol,       # symbol
+		strategy_type,
+		strategy_abstract,
+		strategy,
+		notify_interval_time,
+		strategy_id # WHERE 条件
+	))
+	cur.execute('''UPDATE strategy SET symbol = ? WHERE strategy_id = ?''', (symbol, strategy_id))
+	conn.commit()
+	cur.close()
+	conn.close()
+	queryStrategy()
+def clickStartButton(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
+	print("启动策略")
 # 点击策略回调
 def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
 	x = firstPoint.x
@@ -424,6 +455,7 @@ def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, c
 	elif clicks == 1:
 		print(x)
 		print(y)
+		
 		if 170 < x < 200 and 0 < y < 20:
 			print("删除一个策略")
 			conn = sqlite3.connect('data/user.db')
@@ -437,10 +469,79 @@ def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, c
 			queryStrategy()
 		elif True:
 			control_panel = findViewByName("control", gPaint.views)
-			textbox = FCTextBox()
-			textbox.location = FCPoint(50, 300)
-			addViewToParent(textbox, control_panel)
-			textbox.text = "在此输入"
+			control_panel.views = []
+			comBox = FCComboBox()
+			comBox.text = "加密货币"
+			comBox.location = FCPoint(75, 30)
+			addViewToParent(comBox, control_panel)
+			for i in range(0,10):
+				menuitem = FCMenuItem()
+				menuitem.text = "加密货币" + str(i + 1)
+				addMenuItem(menuitem, comBox)
+
+			SymbolTextbox = FCTextBox()
+			SymbolTextbox.location = FCPoint(75, 70)
+			addViewToParent(SymbolTextbox, control_panel)
+			SymbolTextbox.text = view.strategy[2] 
+
+			TypeTextbox = FCTextBox()
+			TypeTextbox.location = FCPoint(75, 110)
+			addViewToParent(TypeTextbox, control_panel)
+			TypeTextbox.text = str(view.strategy[4])
+
+			AddTimeLabel = FCLabel()
+			AddTimeLabel.textColor = "rgb(255,255,255)"
+			AddTimeLabel.location = FCPoint(75, 150)
+			addViewToParent(AddTimeLabel, control_panel)
+			AddTimeLabel.text = str(view.strategy[12])
+
+			AbstractTextbox = FCTextBox()
+			AbstractTextbox.location = FCPoint(75, 190)
+			addViewToParent(AbstractTextbox, control_panel)
+			AbstractTextbox.text = str(view.strategy[6])
+
+			UpOverTextbox = FCTextBox()
+			UpOverTextbox.location = FCPoint(75, 230)
+			addViewToParent(UpOverTextbox, control_panel)
+			up_over = json.loads(view.strategy[5])["up_over"]
+			UpOverTextbox.text = up_over
+
+			DownUnderTextBox = FCTextBox()
+			DownUnderTextBox.location = FCPoint(75, 270)
+			addViewToParent(DownUnderTextBox, control_panel)
+			down_under = json.loads(view.strategy[5])["down_under"]
+			DownUnderTextBox.text = down_under
+
+			IntervaltimeTextbox = FCTextBox()
+			IntervaltimeTextbox.location = FCPoint(75, 310)
+			addViewToParent(IntervaltimeTextbox, control_panel)
+			IntervaltimeTextbox.text = str(view.strategy[8])
+
+
+			NotifyLevelTexbox = FCTextBox()
+			NotifyLevelTexbox.location = FCPoint(75, 350)
+			addViewToParent(NotifyLevelTexbox, control_panel)
+			NotifyLevelTexbox.text = str(view.strategy[7])
+
+			NotifyTimesTexbox = FCLabel()
+			NotifyTimesTexbox.location = FCPoint(75, 390)
+			NotifyTimesTexbox.textColor ="rgb(255,255,255)"
+			addViewToParent(NotifyTimesTexbox, control_panel)
+			NotifyTimesTexbox.text = str(view.strategy[10]) + "/" + str(view.strategy[9])
+
+
+			submit_change  = FCButton()
+			submit_change.text = "提交更改"
+			submit_change.viewName = view.strategy[1]
+			submit_change.location = FCPoint(50, 500)
+			submit_change.onClick = ChangeStrategy
+			addViewToParent(submit_change, control_panel)
+
+			startButton = FCButton()
+			startButton.text = "运行策略"
+			startButton.onClick = clickStartButton
+			startButton.location = FCPoint(50, 550)
+			addViewToParent(startButton, control_panel)
 			global current_strategy
 			current_strategy = view.strategy
 			invalidate(gPaint)
@@ -621,14 +722,20 @@ with open(f'{current_directory}\\xml\\mainframe.xml', 'r', encoding='utf-8') as 
 
 
 renderFaceCat(gPaint, xml)
+def drawControlPanelDefault(strategy):
+	view = findViewByName("control", gPaint.views)
+	view.views = []
+	addButton = FCButton()
+	addButton.font = "Default,14"
+	addButton.location = FCPoint(50,200)
+	addViewToParent(addButton,  view)
+	addButton.text = "添加策略"
+	addButton.onClick = AddStrategyToAll
 # 绘制控制面板
-control_panel = findViewByName("control", gPaint.views)
-addButton = FCButton()
-addButton.font = "Default,14"
-addButton.location = FCPoint(50,200)
-addViewToParent(addButton,  control_panel)
-addButton.text = "添加策略"
-addButton.onClick = AddStrategyToAll
+
+drawControlPanelDefault(current_strategy)
+
+
 # 绘制策略图层
 StrategyView = findViewByName("allStrategy", gPaint.views)
 queryStrategy()
