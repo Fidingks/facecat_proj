@@ -5,13 +5,6 @@ from MonitorStrategy import mo_price
 global ws_client
 current_directory = os.getcwd()
 DB_PATH = f'{current_directory}/data/user.db' 
-mo = mo_price.PriceMonitor()
-def on_message(data):
-	mo.process(data)
-	pass
-ws_client = BinanceWebSocketClient(on_message_callback=on_message)
-ws_client.start()
-
 # x是allStrategy的宽度
 def ChangeLocation(views, x):
     button_width = 200

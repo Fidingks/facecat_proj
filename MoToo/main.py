@@ -15,6 +15,12 @@ current_directory = os.getcwd()
 DB_PATH = f'{current_directory}/data/user.db' 
 latestDataStr = ""
 current_strategy = []
+mo = mo_price.PriceMonitor()
+def on_message(data):
+	mo.process(data)
+	pass
+ws_client = BinanceWebSocketClient(on_message_callback=on_message)
+ws_client.start()
 
 #开始Http请求
 #url:地址
@@ -298,6 +304,7 @@ def StrategyCallBack(data):
 	for result in results:
 		strategyDiv = StrategyDiv()
 		strategyDiv.strategy = result
+		strategyDiv.viewName = result[1]
 		strategyDiv.onClick = onClickStrategyDiv
 		addViewToParent(strategyDiv, allStrategy)
 	ChangeLocation(allStrategy.views, allStrategy.size.cx)
@@ -419,7 +426,7 @@ def ChangeStrategy(view, firstTouch, firstPoint, secondTouch, secondPoint, click
 	control_panel = view.parent
 	symbol = control_panel.views[1].text
 	strategy_type = control_panel.views[2].text
-	strategy_id = control_panel.views[10].viewName
+	strategy_id = control_panel.views[10].viewName[6:] 
 	strategy_abstract = control_panel.views[4].text
 	up_over = control_panel.views[5].text
 	down_under = control_panel.views[6].text
@@ -441,8 +448,23 @@ def ChangeStrategy(view, firstTouch, firstPoint, secondTouch, secondPoint, click
 	cur.close()
 	conn.close()
 	queryStrategy()
+
 def clickStartButton(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
-	print("启动策略")
+	StrategyDiv = findViewByName(view.viewName[5:], gPaint.views)
+	if StrategyDiv.status == "inactive":
+		print("运行策略")
+		view.text = "停止策略"
+		ws_client.subscribe(f"{StrategyDiv.strategy[2]}@avgPrice")
+		print(StrategyDiv.strategy)
+		StrategyDiv.status = "active"
+		StrategyDiv.borderColor = "rgb(184,255,137)"
+	elif StrategyDiv.status == "active":
+		StrategyDiv.borderColor = "rgb(255,255,255)"
+		view.text = "运行策略"
+		print("停止策略")
+		ws_client.unsubscribe(f"{StrategyDiv.strategy[2]}@avgPrice")
+		StrategyDiv.status = "inactive"
+	invalidate(gPaint)
 # 点击策略回调
 def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
 	x = firstPoint.x
@@ -532,7 +554,7 @@ def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, c
 
 			submit_change  = FCButton()
 			submit_change.text = "提交更改"
-			submit_change.viewName = view.strategy[1]
+			submit_change.viewName = "submit" + view.strategy[1]
 			submit_change.location = FCPoint(50, 500)
 			submit_change.onClick = ChangeStrategy
 			addViewToParent(submit_change, control_panel)
@@ -540,6 +562,7 @@ def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, c
 			startButton = FCButton()
 			startButton.text = "运行策略"
 			startButton.onClick = clickStartButton
+			startButton.viewName = "start" + view.strategy[1]
 			startButton.location = FCPoint(50, 550)
 			addViewToParent(startButton, control_panel)
 			global current_strategy
