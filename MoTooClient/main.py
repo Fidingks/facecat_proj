@@ -20,7 +20,7 @@ current_strategy = []
 #开始Http请求
 #url:地址
 #callBack回调
-def startHttpRequest(url, callBack, tag):
+def startGetRequest(url, callBack, tag):
 	data = FCData()
 	data.key = url
 	data.callBack = callBack
@@ -37,18 +37,19 @@ def startHttpRequest(url, callBack, tag):
 	data.tag = tag
 	gPaint.addData(data)
 	user32.PostMessageW(gPaint.hWnd, 0x0401, 0, 0)
-#开始sql请求
-#calBack回调
-def startSqlRequest(callBack, tag):
+
+def startPostRequest(url, params, callBack, tag):
 	data = FCData()
+	data.key = url
 	data.callBack = callBack
 	try:
-		with sqlite3.connect(DB_PATH) as db:
-			cursor = db.execute("SELECT * FROM strategy")
-			results = cursor.fetchall() 
-			data.success = True
-			data.data = results
-	except Exception as e:
+		s = requests.Session()
+		s.mount('http://', HTTPAdapter(max_retries=3))
+		response = s.post(url, json = params)
+		result = response.text
+		data.success = True
+		data.data = result
+	except requests.exceptions.RequestException as e:
 		data.success = False
 		data.data = str(e)
 	data.tag = tag
@@ -58,14 +59,12 @@ def startSqlRequest(callBack, tag):
 #进行Http请求
 #url:地址
 #callBack回调
-def httpRequest(url, callBack, tag):
-	thread = threading.Thread(target=startHttpRequest, args=(url, callBack, tag))
+def getRequest(url, callBack, tag):
+	thread = threading.Thread(target=startGetRequest, args=(url, callBack, tag))
 	thread.start()
 
-#进行sql请求
-#callBack回调
-def sqlRequest(callBack, tag):
-	thread = threading.Thread(target=startSqlRequest, args=(callBack, tag))
+def postRequest(url, payload, callBack, tag):
+	thread = threading.Thread(target=startPostRequest, args=(url, payload, callBack, tag))
 	thread.start()
 
 #历史数据回调
@@ -142,13 +141,13 @@ def queryHistoryData(mychart, chart, code):
 	tag.append(chart)
 	tag.append(code)
 	tag.append(intCycle)
-	httpRequest(url, historyDataCallBack, tag)
+	getRequest(url, historyDataCallBack, tag)
 	
 #请求最新数据
 def queryNewData(code):
 	url = "http://110.42.188.197:9968/quote?func=getnewdata&codes=" + code
 	tag = []
-	httpRequest(url, newDataCallBack, tag)
+	getRequest(url, newDataCallBack, tag)
 
 #最新数据回调
 def newDataCallBack(data):
@@ -157,7 +156,6 @@ def newDataCallBack(data):
 		result = data.data
 		latestDataStr = result
 		invalidate(gPaint)
-
 
 #板块数据回调
 def queryPriceCallBack(data):
@@ -280,31 +278,27 @@ def queryPriceCallBack(data):
 				row.cells.append(cell22)
 		invalidateView(gridStocks)
 
-
-
 #查询报价数据
 def queryPrice(codes):
 	url = "http://110.42.188.197:9968/quote?func=price&count=500&codes=" + codes
 	tag = []
-	httpRequest(url, queryPriceCallBack, tag)
-
+	getRequest(url, queryPriceCallBack, tag)
 
 #策略数据回调
 def StrategyCallBack(data):
 	global strategyData
 	strategyData = data
-	results = strategyData.data
+	results = json.loads(strategyData.data)
 	allStrategy = findViewByName("allStrategy", gPaint.views)
-	print(results)
 	allStrategy.views = []
 	for result in results:
 		strategyDiv = StrategyDiv()
 		strategyDiv.strategy = result
-		strategyDiv.viewName = result[1]
-		if result[14] == 1:
+		strategyDiv.viewName = result["strategy_id"]
+		if result["active"] == 1:
 			strategyDiv.subscribe()
 		else:
-			strategyDiv.unsubscribe()
+			strategyDiv.status = 0
 		strategyDiv.onClick = onClickStrategyDiv
 		addViewToParent(strategyDiv, allStrategy)
 	ChangeLocation(allStrategy.views, allStrategy.size.cx)
@@ -313,7 +307,35 @@ def StrategyCallBack(data):
 # 查询策略数据库
 def queryStrategy():
 	tag = []
-	sqlRequest(StrategyCallBack, tag)
+	url = "http://127.0.0.1:8000/get-strategy-by-wallet/" + "FWnPy6eH9Y5DbPjui8ojCdwz5gv6WqzSK3hFc5ouct6C"
+	getRequest(url, StrategyCallBack, tag)
+
+# 删除回调
+def DeleteCallBack(data):
+	queryStrategy()
+
+# 删除策略
+def deleteStrategyById(strategy_id):
+	tag = []
+	payload = {"strategy_id":strategy_id}
+	url = f"http://127.0.0.1:8000/delete-strategy/"
+	postRequest(url, payload, DeleteCallBack, tag)
+
+# 更新回调
+def UpdateCallBack(data):
+	queryStrategy()
+
+# 更新策略
+def updateStrategy(payload):
+	tag = []
+	url = f"http://127.0.0.1:8000/update-strategy/"
+	postRequest(url, payload, UpdateCallBack, tag)
+
+#添加回调
+def addCallBack(data):
+	print(data.data)
+	queryStrategy()
+
 #绘制视图
 #view:视图
 #paint:绘图对象
@@ -406,21 +428,23 @@ def onClick(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
 		current_strategy = []
 		drawControlPanelDefault(current_strategy)
 		invalidate(gPaint)
+
 # 添加策略回调
 def AddStrategyToAll(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
 	print("添加一个策略")
-	strategy_id = str(int(time.time()))
-	conn = sqlite3.connect('data/user.db')
-	cur = conn.cursor()
-	cur.execute('''
-	INSERT INTO strategy (wallet,strategy_id, symbol, strategy_type, strategy, strategy_abstract, add_time) 
-	VALUES ( ?, ?, ?, ?, ?, ?, ?)
-	''', ("KNnPy6eH9Y5DbPjui8ojCdwz5gv6WqzSK3hFc5ouct6C",strategy_id, "btcusdt", 0, '{"up_over":"92000","down_under":"88000"}',"涨破100,跌破50", time.time()))
-	# 提交更改并关闭连接
-	conn.commit()
-	cur.close()
-	conn.close()
-	queryStrategy()
+	tag = []
+	payload = {
+    "symbol": "btcusdt",
+	"wallet": "FWnPy6eH9Y5DbPjui8ojCdwz5gv6WqzSK3hFc5ouct6C",
+    "strategy_type": 0,
+    "strategy": '{"up_over":"4500","down_under":"3000"}',
+    "strategy_abstract": "涨破4500，跌破3000",
+    "notify_level": 1,
+    "notify_interval_time": 30,
+    "total_notify_times": 3
+}
+	url = f'''http://127.0.0.1:8000/add-strategy/'''
+	postRequest(url, payload, addCallBack, tag)
 
 def ChangeStrategy(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
 	control_panel = view.parent
@@ -433,29 +457,23 @@ def ChangeStrategy(view, firstTouch, firstPoint, secondTouch, secondPoint, click
 	notify_interval_time =  control_panel.views[7].text
 	strategy = json.dumps({"up_over":up_over, "down_under":down_under})
 	print("提交策略更改到数据库")
-	conn = sqlite3.connect('data/user.db')
-	cur = conn.cursor()
-	cur.execute('''UPDATE strategy SET symbol = ?, strategy_type = ?, strategy_abstract = ? ,strategy = ?,notify_interval_time = ?  WHERE strategy_id = ?''', (
-		symbol,       # symbol
-		strategy_type,
-		strategy_abstract,
-		strategy,
-		notify_interval_time,
-		strategy_id # WHERE 条件
-	))
-	cur.execute('''UPDATE strategy SET symbol = ? WHERE strategy_id = ?''', (symbol, strategy_id))
-	conn.commit()
-	cur.close()
-	conn.close()
-	queryStrategy()
-
+	payload = {"symbol": symbol,
+    "strategy_id": strategy_id,
+    "strategy_type": strategy_type,
+    "strategy": strategy,
+    "strategy_abstract": strategy_abstract,
+    "notify_level": 1,
+    "notify_interval_time": notify_interval_time,
+    "total_notify_times": 3}
+	updateStrategy(payload)
+	
 def clickStartButton(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
 	StrategyDiv = findViewByName(view.viewName[5:], gPaint.views)
-	if StrategyDiv.status == "inactive":
+	if StrategyDiv.status == 0:
 		print("运行策略")
 		view.text = "停止策略"
 		StrategyDiv.subscribe()
-	elif StrategyDiv.status == "active":
+	elif StrategyDiv.status == 1:
 		StrategyDiv.unsubscribe()
 		view.text = "运行策略"
 		print("停止策略")
@@ -465,9 +483,10 @@ def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, c
 	x = firstPoint.x
 	y = firstPoint.y
 	if clicks == 2:
-		if view.status == "active":
-			view.status = "inactive"
-			view.borderColor = "rgb(255,255,255)"
+		if view.status == 1:
+			view.unsubscribe()
+		elif view.status == 0:
+			view.subscribe()
 		print("启动策略")
 	elif clicks == 1:
 		print(x)
@@ -475,14 +494,7 @@ def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, c
 		
 		if 170 < x < 200 and 0 < y < 20:
 			print("删除一个策略")
-			conn = sqlite3.connect('data/user.db')
-			cur = conn.cursor()
-			cur.execute('''
-			DELETE FROM strategy WHERE strategy_id = ?
-			''', (view.strategy[1],)) 
-			conn.commit()
-			cur.close()
-			conn.close()
+			deleteStrategyById(view.viewName)
 			queryStrategy()
 		elif True:
 			control_panel = findViewByName("control", gPaint.views)
@@ -499,57 +511,57 @@ def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, c
 			SymbolTextbox = FCTextBox()
 			SymbolTextbox.location = FCPoint(75, 70)
 			addViewToParent(SymbolTextbox, control_panel)
-			SymbolTextbox.text = view.strategy[2] 
+			SymbolTextbox.text = view.strategy["symbol"] 
 
 			TypeTextbox = FCTextBox()
 			TypeTextbox.location = FCPoint(75, 110)
 			addViewToParent(TypeTextbox, control_panel)
-			TypeTextbox.text = str(view.strategy[4])
+			TypeTextbox.text = str(view.strategy["strategy_type"])
 
 			AddTimeLabel = FCLabel()
 			AddTimeLabel.textColor = "rgb(255,255,255)"
 			AddTimeLabel.location = FCPoint(75, 150)
 			addViewToParent(AddTimeLabel, control_panel)
-			AddTimeLabel.text = str(view.strategy[12])
+			AddTimeLabel.text = str(view.strategy["add_time"])
 
 			AbstractTextbox = FCTextBox()
 			AbstractTextbox.location = FCPoint(75, 190)
 			addViewToParent(AbstractTextbox, control_panel)
-			AbstractTextbox.text = str(view.strategy[6])
+			AbstractTextbox.text = str(view.strategy["strategy_abstract"])
 
 			UpOverTextbox = FCTextBox()
 			UpOverTextbox.location = FCPoint(75, 230)
 			addViewToParent(UpOverTextbox, control_panel)
-			up_over = json.loads(view.strategy[5])["up_over"]
+			up_over = json.loads(view.strategy["strategy"])["up_over"]
 			UpOverTextbox.text = up_over
 
 			DownUnderTextBox = FCTextBox()
 			DownUnderTextBox.location = FCPoint(75, 270)
 			addViewToParent(DownUnderTextBox, control_panel)
-			down_under = json.loads(view.strategy[5])["down_under"]
+			down_under = json.loads(view.strategy["strategy"])["down_under"]
 			DownUnderTextBox.text = down_under
 
 			IntervaltimeTextbox = FCTextBox()
 			IntervaltimeTextbox.location = FCPoint(75, 310)
 			addViewToParent(IntervaltimeTextbox, control_panel)
-			IntervaltimeTextbox.text = str(view.strategy[8])
+			IntervaltimeTextbox.text = str(view.strategy["notify_interval_time"])
 
 
 			NotifyLevelTexbox = FCTextBox()
 			NotifyLevelTexbox.location = FCPoint(75, 350)
 			addViewToParent(NotifyLevelTexbox, control_panel)
-			NotifyLevelTexbox.text = str(view.strategy[7])
+			NotifyLevelTexbox.text = str(view.strategy["notify_level"])
 
 			NotifyTimesTexbox = FCLabel()
 			NotifyTimesTexbox.location = FCPoint(75, 390)
 			NotifyTimesTexbox.textColor ="rgb(255,255,255)"
 			addViewToParent(NotifyTimesTexbox, control_panel)
-			NotifyTimesTexbox.text = str(view.strategy[10]) + "/" + str(view.strategy[9])
+			NotifyTimesTexbox.text = str(view.strategy["notified_times"]) + "/" + str(view.strategy["total_notify_times"])
 
 
 			submit_change  = FCButton()
 			submit_change.text = "提交更改"
-			submit_change.viewName = "submit" + view.strategy[1]
+			submit_change.viewName = "submit" + view.strategy["strategy_id"]
 			submit_change.location = FCPoint(50, 500)
 			submit_change.onClick = ChangeStrategy
 			addViewToParent(submit_change, control_panel)
@@ -557,7 +569,7 @@ def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, c
 			startButton = FCButton()
 			startButton.text = "运行策略"
 			startButton.onClick = clickStartButton
-			startButton.viewName = "start" + view.strategy[1]
+			startButton.viewName = "start" + view.strategy["strategy_id"]
 			startButton.location = FCPoint(50, 550)
 			addViewToParent(startButton, control_panel)
 			global current_strategy
