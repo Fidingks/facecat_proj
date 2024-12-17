@@ -5,6 +5,12 @@ from MonitorStrategy import mo_price
 global ws_client
 current_directory = os.getcwd()
 DB_PATH = f'{current_directory}/data/user.db' 
+mo = mo_price.PriceMonitor()
+def on_message(data):
+	mo.process(data)
+    
+ws_client = BinanceWebSocketClient(on_message_callback=on_message)
+ws_client.start()
 # x是allStrategy的宽度
 def ChangeLocation(views, x):
     button_width = 200
@@ -30,7 +36,7 @@ class StrategyDiv(FCView):
         super().__init__()
         self.strategy = {}
         self.viewType = "div" #类型
-        self.status = "inactive" # 
+        self.status = ""
         self.size = FCSize(200, 300)
         self.viewType = "strategyDiv"
         self.backColor = "rgb(0,0,0)"
@@ -43,6 +49,7 @@ class StrategyDiv(FCView):
 
     def unsubscribe(self):
         strategy_id = (self.strategy[1])
+        self.borderColor = "rgb(255,255,255)"
         conn = sqlite3.connect(DB_PATH)
         cur = conn.cursor()
         cur.execute('''
@@ -53,11 +60,13 @@ class StrategyDiv(FCView):
         conn.commit()
         cur.close()
         conn.close()
+        self.status = "inactive"
         symbol = self.strategy[2]
         ws_client.unsubscribe(f"{symbol}@avgPrice")
 
     def subscribe(self):
         strategy_id = (self.strategy[1])
+        self.borderColor = "rgb(184,255,137)"
         conn = sqlite3.connect(DB_PATH)
         cur = conn.cursor()
         cur.execute('''
@@ -69,7 +78,7 @@ class StrategyDiv(FCView):
         cur.close()
         conn.close()
         symbol = self.strategy[2]
-        print(symbol)
+        self.status = "active"
         ws_client.subscribe(f"{symbol}@avgPrice")
 
     def onPaintStrategyDiv(self, div, paint, clipRect):

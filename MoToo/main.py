@@ -15,12 +15,7 @@ current_directory = os.getcwd()
 DB_PATH = f'{current_directory}/data/user.db' 
 latestDataStr = ""
 current_strategy = []
-mo = mo_price.PriceMonitor()
-def on_message(data):
-	mo.process(data)
-	pass
-ws_client = BinanceWebSocketClient(on_message_callback=on_message)
-ws_client.start()
+
 
 #开始Http请求
 #url:地址
@@ -300,11 +295,16 @@ def StrategyCallBack(data):
 	strategyData = data
 	results = strategyData.data
 	allStrategy = findViewByName("allStrategy", gPaint.views)
+	print(results)
 	allStrategy.views = []
 	for result in results:
 		strategyDiv = StrategyDiv()
 		strategyDiv.strategy = result
 		strategyDiv.viewName = result[1]
+		if result[14] == 1:
+			strategyDiv.subscribe()
+		else:
+			strategyDiv.unsubscribe()
 		strategyDiv.onClick = onClickStrategyDiv
 		addViewToParent(strategyDiv, allStrategy)
 	ChangeLocation(allStrategy.views, allStrategy.size.cx)
@@ -454,16 +454,11 @@ def clickStartButton(view, firstTouch, firstPoint, secondTouch, secondPoint, cli
 	if StrategyDiv.status == "inactive":
 		print("运行策略")
 		view.text = "停止策略"
-		ws_client.subscribe(f"{StrategyDiv.strategy[2]}@avgPrice")
-		print(StrategyDiv.strategy)
-		StrategyDiv.status = "active"
-		StrategyDiv.borderColor = "rgb(184,255,137)"
+		StrategyDiv.subscribe()
 	elif StrategyDiv.status == "active":
-		StrategyDiv.borderColor = "rgb(255,255,255)"
+		StrategyDiv.unsubscribe()
 		view.text = "运行策略"
 		print("停止策略")
-		ws_client.unsubscribe(f"{StrategyDiv.strategy[2]}@avgPrice")
-		StrategyDiv.status = "inactive"
 	invalidate(gPaint)
 # 点击策略回调
 def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):

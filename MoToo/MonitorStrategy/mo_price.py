@@ -14,7 +14,6 @@ from data import db_operate
 # 服务器的数据 是一个个Json
 current_directory = os.getcwd()
 DB_PATH = f'{current_directory}/data/user.db' 
-print(DB_PATH)
 class PriceMonitor:
     def __init__(self):
         self.symbols = [] # 监控对象
