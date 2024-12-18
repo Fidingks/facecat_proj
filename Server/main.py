@@ -1,15 +1,28 @@
 import fastapi
+import threading
 from fastapi import FastAPI, HTTPException
+import json
+import requests
+import time
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 import sqlite3
 from typing import Dict
+import asyncio
+import websockets
+from DataApi.sub_data import BinanceWebSocketClient
+from MonitorStrategy import mo_price
 import uvicorn
 DATABASE = "../MoToo/data/user.db"
-
+notify_info = []
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 应用启动时执行
+    global mo
+    mo = mo_price.PriceMonitor()
+    global ws_client
+    ws_client = BinanceWebSocketClient(on_message_callback=on_message)
+    ws_client.start()
     db_connection = sqlite3.connect(DATABASE, check_same_thread=False)
     db_connection.row_factory = sqlite3.Row  # 结果返回为字典格式
     app.state.db_connection = db_connection
@@ -36,11 +49,12 @@ def get_strategy_by_id(db_connection: sqlite3.Connection, strategy_id: str) -> D
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-def get_strategy_by_wallet(db_connection: sqlite3.Connection, wallet: str) -> Dict:
+def get_strategy_by_active() -> Dict:
     try:
+        db_connection = app.state.db_connection
         cursor = db_connection.cursor()
-        query = "SELECT * FROM strategy WHERE strategy_id = ?"
-        cursor.execute(query, (wallet,))
+        query = "SELECT * FROM strategy WHERE active = ?"
+        cursor.execute(query, (1,))
         result = cursor.all()
         if result:
             return dict(result)
@@ -80,7 +94,23 @@ def read_strategy(wallet: str):
             raise HTTPException(status_code=404, detail="Strategy record not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-    
+
+# 根据激活状态获取策略
+@app.get("/get-strategy-by-active/{active}")
+def read_strategy(active: int):
+    db_connection = app.state.db_connection
+    try:
+        cursor = db_connection.cursor()
+        query = "SELECT * FROM strategy WHERE active = ?"
+        cursor.execute(query, (active,))
+        result = cursor.fetchall()
+        if result:
+            return (result)
+        else:
+            raise HTTPException(status_code=404, detail="Strategy record not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
 # 获取全部策略
 @app.get("/get-all-strategy/")
 def read_strategy():
@@ -237,7 +267,6 @@ class AddStrategyRequest(BaseModel):
 def add_strategy(request: AddStrategyRequest):
     """
     添加新策略
-    请求示例: POST /add-strategy/
     参数:
         - symbol
         - wallet
@@ -281,7 +310,25 @@ def add_strategy(request: AddStrategyRequest):
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
 # 建立双向通信通道
+# 数据回调
+def on_message(data):
+    print(f"notifyinfo {notify_info}")
+    mo.process(data, notify_info)
+    
+async def task():
+    results = json.loads(requests.get("http://127.0.0.1:8000/get-strategy-by-active/1").text)
+    print(results)
+    global notify_info
+    notify_info = results
+    for result in results:
+        # 加个检查 是否已经订阅数据流
+        symbol =  result["symbol"]
+        ws_client.subscribe(f"{symbol}@avgPrice")
 
+def start_websocket_client():
+    asyncio.run(task())
 
 if __name__ == "__main__":
+    websocket_thread = threading.Thread(target=start_websocket_client, daemon=True)
+    websocket_thread.start()
     uvicorn.run(app, host="0.0.0.0", port=8000)
