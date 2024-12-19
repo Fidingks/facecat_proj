@@ -294,6 +294,7 @@ def StrategyCallBack(data):
 	for result in results:
 		strategyDiv = StrategyDiv()
 		strategyDiv.strategy = result
+		print(result)
 		strategyDiv.viewName = result["strategy_id"]
 		if result["active"] == 1:
 			strategyDiv.subscribe()
