@@ -9,6 +9,7 @@ import sqlite3
 from typing import Dict
 import datetime
 import asyncio
+import notify
 import websockets
 import uvicorn
 DATABASE = "../MoToo/data/user.db"
@@ -85,6 +86,8 @@ class BinanceWebSocketClient:
             # 检查 strategy_id 是否存在
             cursor.execute("SELECT * FROM strategy WHERE strategy_id = ?", (strategy_id,))
             result = cursor.fetchone()
+            cursor.execute("SELECT * FROM strategy WHERE active = ?", (1,))
+            database_symbols = cursor.fetchall()
             if not result:
                 raise HTTPException(status_code=404, detail="Strategy record not found")
             total_notify_times = result["total_notify_times"]
@@ -93,6 +96,10 @@ class BinanceWebSocketClient:
             active = 1
             if total_notify_times - 1 == notified_times:
                 active = 0
+                if database_symbols.count(result["symbol"]) == 1 and ws_client.subscribed_streams.count(result["symbol"]) == 1:
+                    print("取消订阅")
+                    ws_client.unsubscribe(result["symbol"])
+                
             # 更新 active 字段
             update_query = """
                 UPDATE strategy
@@ -105,46 +112,62 @@ class BinanceWebSocketClient:
             query = "SELECT * FROM strategy WHERE active = 1"
             update_data = cursor.execute(query)
             print(update_data)
+            cursor.execute("SELECT * FROM strategy WHERE active = ?", (1,))
+            strategies = cursor.fetchall()
+            ws_client.strategies = strategies
             db_connection.commit()  # 提交事务
             return {"detail": f"Update Strategy {strategy_id} notify status successfully "}
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
         
     def process(self, callbackData):
-        if "e" in callbackData and callbackData["e"] == "avgPrice":
-            callbackSymbol = callbackData["s"]
-            price = float(callbackData["w"])
-            print(f"标的{callbackSymbol} 回调价格{price}")
-            # for item in self.strategies:
-            #     print(f"标的{callbackSymbol} 回调价格{price} 涨破价格{json.loads(item["strategy"])["up_over"]} 通知间隔{time.time() - item["last_notify_time"]}")
-            #     if item["strategy_type"] == 0: # 价格破位策略
-            #         if callbackSymbol.lower() == item["symbol"]: # 与传来的数据匹配
-            #             # 检查是否满足通知条件
-            #             if time.time() - item["last_notify_time"] > item["notify_interval_time"] * 60: # 冷却时间
-            #                 if item["total_notify_times"] > item["notified_times"]:
-            #                     dt_object = datetime.datetime.fromtimestamp(time.time()) 
-            #                     formatted_time = dt_object.strftime("%H:%M")
-            #                     up_over = float(json.loads(item["strategy"])["up_over"])
-            #                     down_under = float(json.loads(item["strategy"])["down_under"])
-            #                     if price > up_over:
-            #                         print("涨破")
-            #                         # notify.send_wechat_notice(f"{formatted_time}\n{symbol} 🚀涨破{up_over}\n当前：{price:.2f}$")
-            #                         request = self.notify_once(item["strategy_id"])
-            #                     elif price < down_under:
-            #                         print("跌破")
-            #                         # notify.send_wechat_notice(f"{formatted_time}\n{symbol} ⬇️跌破{down_under}\n当前：{price:.2f}$") 
-            #                         request = self.notify_once(item["strategy_id"])
-            #             else:
-            #                 # print("通知时间不满足")
-            #                 pass
-
+        # 检查是否是目标事件
+        if "e" not in callbackData or callbackData["e"] != "avgPrice":
+            return
         elif "result" in callbackData:
             print(callbackData)
-            # 处理数据库
-            # strategies = db_operate.get_strategies("FWnPy6eH9Y5DbPjui8ojCdwz5gv6WqzSK3hFc5ouct6C")
-            # for strategy in strategies:
-            #     if strategy[10] == 1:
-            #         self.strategies.append([strategy[2],strategy[1], strategy[4], strategy[5]]) # symbol id, type, strategy
+        callback_symbol = callbackData["s"]
+        price = float(callbackData["w"])
+        
+        for strategy in self.strategies:
+            strategy_type = strategy["strategy_type"]
+            if strategy_type != 0:  # 只处理价格破位策略
+                continue
+            
+            strategy_symbol = strategy["symbol"].lower()
+            if callback_symbol.lower() != strategy_symbol:  # 检查是否是匹配的代币
+                continue
+            
+            # 解析策略数据
+            strategy_data = json.loads(strategy["strategy"])
+            up_over = float(strategy_data["up_over"])
+            down_under = float(strategy_data["down_under"])
+            strategy_id = strategy["strategy_id"]
+            last_notify_time = strategy["last_notify_time"]
+            notify_interval_time = strategy["notify_interval_time"] * 60
+            notified_times = strategy["notified_times"]
+            total_notify_times = strategy["total_notify_times"]
+
+            # 打印调试信息
+            print(f"标的 {callback_symbol} 当前价格 {price:.2f} 涨破价格 {up_over} 跌破价格 {down_under} "
+                  f"通知间隔 {time.time() - last_notify_time}")
+
+            # 检查通知条件
+            if time.time() - last_notify_time < notify_interval_time:
+                continue  # 冷却时间未到
+            
+            if notified_times >= total_notify_times:
+                continue  # 已达通知次数上限
+
+            # 符合条件时进行通知
+            formatted_time = datetime.datetime.fromtimestamp(time.time()).strftime("%H:%M")
+            if price > up_over:
+                self.notify_once(strategy_id)
+                notify.send_wechat_notice(f"{formatted_time}\n{callback_symbol} 🚀涨破{up_over}\n当前：{price}$")
+            elif price < down_under:
+                self.notify_once(strategy_id)
+                notify.send_wechat_notice(f"{formatted_time}\n{callback_symbol} ⬇️跌破{down_under}\n当前：{price}$")
+                
 
     def subscribe(self, stream):
         """Subscribe to specified streams."""
@@ -170,7 +193,7 @@ class BinanceWebSocketClient:
             self.subscribed_streams.remove(stream)
             message = {
                 "method": "UNSUBSCRIBE",
-                "params": [stream],
+                "params": [f"{stream}@avgPrice"],
                 "id": self.id_counter
             }
             # 确保连接已建立
@@ -350,12 +373,6 @@ def update_active(request: UpdateActiveRequest):
     try:
         cursor = db_connection.cursor()
 
-        cursor.execute("SELECT * FROM strategy WHERE active = ?", (1,))
-        database_symbols = []
-        strategies = cursor.fetchall()
-        for item in strategies:
-            database_symbols.append(item["symbol"])
-
         # 检查 strategy_id 是否存在
         cursor.execute("SELECT * FROM strategy WHERE strategy_id = ?", (request.strategy_id,))
         result = cursor.fetchone()
@@ -371,6 +388,12 @@ def update_active(request: UpdateActiveRequest):
         cursor.execute(update_query, (request.active, request.strategy_id))
         db_connection.commit()  # 提交事务
 
+        cursor.execute("SELECT * FROM strategy WHERE active = ?", (1,))
+        database_symbols = []
+        strategies = cursor.fetchall()
+        for item in strategies:
+            database_symbols.append(item["symbol"])
+
         subcirbed_symbols = ws_client.subscribed_streams
 
         print(f"subcirbed_symbols{subcirbed_symbols}, \ndatabase_symbols{database_symbols}")
@@ -381,14 +404,14 @@ def update_active(request: UpdateActiveRequest):
             else:
                 print("没有订阅的标的，订阅")
                 ws_client.subscribe(result["symbol"])
-
+            
         elif request.active == 0:
             if database_symbols.count(result["symbol"]) == 1 and subcirbed_symbols.count(result["symbol"]) == 1:
                 print("取消订阅")
                 ws_client.unsubscribe(result["symbol"])
             else:
                 print("无需取消订阅")
-        
+        ws_client.strategies = strategies
         status = "activated" if request.active == 1 else "stopped"
         return {"detail": f"Strategy {request.strategy_id} successfully {status}"}
     except Exception as e:
