@@ -4,18 +4,111 @@ from facecat import *
 import json
 #这里可能需要pip install requests
 import requests
-import sqlite3
 from requests.adapters import HTTPAdapter
-import random
 from Divs.LatestDiv import drawLatestDiv, getPriceColor
 from Divs.Strategy import *
 from Divs.ControlPanel import *
 from datetime import datetime
+import ast
+import threading
+import json
+import asyncio
+import websockets
+import time
 current_directory = os.getcwd()
 DB_PATH = f'{current_directory}/data/user.db' 
 latestDataStr = ""
 current_strategy = []
 
+class WebSocketClient:
+    def __init__(self, server_url, on_message_callback=None):
+        """
+        WebSocket 客户端初始化
+        :param server_url: 服务端 WebSocket URL
+        :param on_message_callback: 接收到消息时的回调函数
+        """
+        self.url = server_url
+        self.connection = None
+        self.loop = asyncio.new_event_loop()
+        self.thread = None
+        self.on_message_callback = on_message_callback  # 收到消息时的回调函数
+
+    def start(self):
+        """启动 WebSocket 客户端并在独立线程中运行"""
+        print("启动 WebSocket 客户端...")
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+        # 等待连接建立
+        time.sleep(1)
+
+    def _run(self):
+        """运行 asyncio 事件循环"""
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_until_complete(self.connect())
+        self.loop.run_forever()
+
+    async def connect(self):
+        """连接到服务端 WebSocket 并处理消息"""
+        try:
+            self.connection = await websockets.connect(self.url)
+            print(f"成功连接到服务器: {self.url}")
+            asyncio.create_task(self.handle_messages())  # 启动消息处理任务
+            self.send_message("get_all_strategy", {})
+        except Exception as e:
+            print(f"连接失败: {e}")
+
+    async def handle_messages(self):
+        """处理从服务端接收到的消息"""
+        while True:
+            try:
+                message = await self.connection.recv()
+                data = json.loads(message)
+                if self.on_message_callback:
+                   self.on_message_callback(data)
+            except websockets.ConnectionClosed:
+                print("连接已关闭，尝试重新连接...")
+                break
+
+    def send_message(self, action, data):
+        """
+        向服务端发送消息
+        :param action: 指令类型（如 "get_strategy", "add_strategy" 等）
+        :param data: 数据字典
+        """
+        if self.connection:
+            message = {
+                "action": action,
+                "data": data
+            }
+            # 使用 asyncio 的线程安全方法在事件循环中发送消息
+            asyncio.run_coroutine_threadsafe(self.connection.send(json.dumps(message)), self.loop)
+            print(f"已发送消息: {message}")
+        else:
+            print("连接尚未建立，无法发送消息")
+
+    def stop(self):
+        """关闭 WebSocket 连接并停止事件循环"""
+        if self.loop.is_running():
+            self.loop.call_soon_threadsafe(self.loop.stop)
+        if self.thread.is_alive():
+            self.thread.join()
+        print("WebSocket 客户端已停止")
+
+# 示例回调函数
+def process(data):
+	print(f"回调: {data}")
+	if data["action"] == "get_all_strategy":
+		message = data.get("message", "")
+		parsed_message = ast.literal_eval(message)  # 使用 literal_eval 解析
+		StrategyCallBack(parsed_message)
+	if data["action"] == "start_strategy":
+		print("启动 或者 停止 这个策略")
+	if data["action"] == "add_strategy":
+		message = data.get("message", "")
+		parsed_message = ast.literal_eval(message)  # 使用 literal_eval 解析
+		StrategyCallBack(parsed_message)
+ws_client = WebSocketClient(server_url= "ws://localhost:8000/ws", on_message_callback=process)
+ws_client.start()
 
 #开始Http请求
 #url:地址
@@ -286,18 +379,15 @@ def queryPrice(codes):
 
 #策略数据回调
 def StrategyCallBack(data):
-	global strategyData
-	strategyData = data
-	results = json.loads(strategyData.data)
 	allStrategy = findViewByName("allStrategy", gPaint.views)
 	allStrategy.views = []
-	for result in results:
+	for result in data:
 		strategyDiv = StrategyDiv()
-		strategyDiv.strategy = result
-		print(result)
-		strategyDiv.viewName = result["strategy_id"]
-		if result["active"] == 1:
-			strategyDiv.subscribe()
+		strategyDiv.strategy =list(result)
+		strategyDiv.viewName = result[1] # strategy_id
+		strategyDiv.status = result[14] # active
+		if result[14] == 1: # active
+			strategyDiv.borderColor = "rgb(184,255,137)"
 		else:
 			strategyDiv.status = 0
 		strategyDiv.onClick = onClickStrategyDiv
@@ -443,9 +533,10 @@ def AddStrategyToAll(view, firstTouch, firstPoint, secondTouch, secondPoint, cli
     "notify_level": 1,
     "notify_interval_time": 30,
     "total_notify_times": 3
-}
+	}
 	url = f'''http://127.0.0.1:8000/add-strategy/'''
-	postRequest(url, payload, addCallBack, tag)
+	ws_client.send_message("add_strategy", payload)
+
 
 def ChangeStrategy(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
 	control_panel = view.parent
@@ -466,18 +557,35 @@ def ChangeStrategy(view, firstTouch, firstPoint, secondTouch, secondPoint, click
     "notify_level": 1,
     "notify_interval_time": notify_interval_time,
     "total_notify_times": 3}
-	updateStrategy(payload)
-	
+	ws_client.send_message("update_strategy", payload)
+	strategyDiv = findViewByName(strategy_id, gPaint.views)
+	strategyDiv.strategy[2] = symbol
+	strategyDiv.strategy[6] = strategy_abstract
+	strategyDiv.strategy[8] = notify_interval_time
+	strategyDiv.strategy[5] = json.dumps({"up_over":up_over, "down_under":down_under})
+	invalidate(gPaint)
+
 def clickStartButton(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
 	StrategyDiv = findViewByName(view.viewName[5:], gPaint.views)
 	if StrategyDiv.status == 0:
 		print("运行策略")
 		view.text = "停止策略"
-		StrategyDiv.subscribe()
+		view.backColor = "rgb(180,0,0)"
+		strategy_id = (StrategyDiv.strategy[1])
+		StrategyDiv.borderColor = "rgb(184,255,137)"
+		payload = {"strategy_id":strategy_id, "active":1}
+		StrategyDiv.status = 1
+		ws_client.send_message("start_strategy", payload)
 	elif StrategyDiv.status == 1:
-		StrategyDiv.unsubscribe()
+		view.backColor = "rgb(255,255,255)"
+		StrategyDiv.borderColor = "rgb(255,255,255)"
+		strategy_id = (StrategyDiv.strategy[1])
+		payload = {"strategy_id":strategy_id, "active":0}
+		# ws发送
+		StrategyDiv.status = 0
 		view.text = "运行策略"
 		print("停止策略")
+		ws_client.send_message("start_strategy", payload)
 	invalidate(gPaint)
 # 点击策略回调
 def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
@@ -495,8 +603,9 @@ def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, c
 		
 		if 170 < x < 200 and 0 < y < 20:
 			print("删除一个策略")
-			deleteStrategyById(view.viewName)
-			queryStrategy()
+			ws_client.send_message("delete_strategy", {"strategy_id":view.viewName})
+			removeViewFromParent(view, view.parent)
+			# queryStrategy()
 		elif True:
 			control_panel = findViewByName("control", gPaint.views)
 			control_panel.views = []
@@ -512,65 +621,69 @@ def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, c
 			SymbolTextbox = FCTextBox()
 			SymbolTextbox.location = FCPoint(75, 70)
 			addViewToParent(SymbolTextbox, control_panel)
-			SymbolTextbox.text = view.strategy["symbol"] 
+			SymbolTextbox.text = view.strategy[2] 
 
 			TypeTextbox = FCTextBox()
 			TypeTextbox.location = FCPoint(75, 110)
 			addViewToParent(TypeTextbox, control_panel)
-			TypeTextbox.text = str(view.strategy["strategy_type"])
+			TypeTextbox.text = str(view.strategy[4])
 
 			AddTimeLabel = FCLabel()
 			AddTimeLabel.textColor = "rgb(255,255,255)"
 			AddTimeLabel.location = FCPoint(75, 150)
 			addViewToParent(AddTimeLabel, control_panel)
-			AddTimeLabel.text = str(view.strategy["add_time"])
+			AddTimeLabel.text = str(view.strategy[13])
 
 			AbstractTextbox = FCTextBox()
 			AbstractTextbox.location = FCPoint(75, 190)
 			addViewToParent(AbstractTextbox, control_panel)
-			AbstractTextbox.text = str(view.strategy["strategy_abstract"])
+			AbstractTextbox.text = str(view.strategy[6])
 
 			UpOverTextbox = FCTextBox()
 			UpOverTextbox.location = FCPoint(75, 230)
 			addViewToParent(UpOverTextbox, control_panel)
-			up_over = json.loads(view.strategy["strategy"])["up_over"]
+			up_over = json.loads(view.strategy[5])["up_over"]
 			UpOverTextbox.text = up_over
 
 			DownUnderTextBox = FCTextBox()
 			DownUnderTextBox.location = FCPoint(75, 270)
 			addViewToParent(DownUnderTextBox, control_panel)
-			down_under = json.loads(view.strategy["strategy"])["down_under"]
+			down_under = json.loads(view.strategy[5])["down_under"]
 			DownUnderTextBox.text = down_under
 
 			IntervaltimeTextbox = FCTextBox()
 			IntervaltimeTextbox.location = FCPoint(75, 310)
 			addViewToParent(IntervaltimeTextbox, control_panel)
-			IntervaltimeTextbox.text = str(view.strategy["notify_interval_time"])
+			IntervaltimeTextbox.text = str(view.strategy[8])
 
 
 			NotifyLevelTexbox = FCTextBox()
 			NotifyLevelTexbox.location = FCPoint(75, 350)
 			addViewToParent(NotifyLevelTexbox, control_panel)
-			NotifyLevelTexbox.text = str(view.strategy["notify_level"])
+			NotifyLevelTexbox.text = str(view.strategy[7])
 
 			NotifyTimesTexbox = FCLabel()
 			NotifyTimesTexbox.location = FCPoint(75, 390)
 			NotifyTimesTexbox.textColor ="rgb(255,255,255)"
 			addViewToParent(NotifyTimesTexbox, control_panel)
-			NotifyTimesTexbox.text = str(view.strategy["notified_times"]) + "/" + str(view.strategy["total_notify_times"])
+			NotifyTimesTexbox.text = str(view.strategy[11]) + "/" + str(view.strategy[10])
 
 
 			submit_change  = FCButton()
 			submit_change.text = "提交更改"
-			submit_change.viewName = "submit" + view.strategy["strategy_id"]
+			submit_change.viewName = "submit" + view.strategy[1]
 			submit_change.location = FCPoint(50, 500)
 			submit_change.onClick = ChangeStrategy
 			addViewToParent(submit_change, control_panel)
 
 			startButton = FCButton()
-			startButton.text = "运行策略"
+			if view.status == 1:
+				startButton.text = "停止策略"
+				startButton.backColor = "rgb(188,0,0)"
+			elif view.status == 0:
+				startButton.text = "运行策略"
 			startButton.onClick = clickStartButton
-			startButton.viewName = "start" + view.strategy["strategy_id"]
+			startButton.viewName = "start" + view.strategy[1]
 			startButton.location = FCPoint(50, 550)
 			addViewToParent(startButton, control_panel)
 			global current_strategy
@@ -769,7 +882,8 @@ drawControlPanelDefault(current_strategy)
 
 # 绘制策略图层
 StrategyView = findViewByName("allStrategy", gPaint.views)
-queryStrategy()
+# queryStrategy()
+
 
 gridStocks = findViewByName("gridStocks", gPaint.views)
 for i in range(3, len(gridStocks.columns)):

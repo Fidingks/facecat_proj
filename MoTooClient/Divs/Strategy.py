@@ -1,17 +1,7 @@
 from facecat import * 
-import sqlite3
-import requests
-from DataApi.sub_data import BinanceWebSocketClient
-from MonitorStrategy import mo_price
-global ws_client
 current_directory = os.getcwd()
 DB_PATH = f'{current_directory}/data/user.db' 
-mo = mo_price.PriceMonitor()
-def on_message(data):
-	mo.process(data)
-    
-ws_client = BinanceWebSocketClient(on_message_callback=on_message)
-ws_client.start()
+
 # x是allStrategy的宽度
 def ChangeLocation(views, x):
     button_width = 200
@@ -49,18 +39,10 @@ class StrategyDiv(FCView):
         self.onMouseWheel = self.scroll
 
     def unsubscribe(self):
-        strategy_id = (self.strategy["strategy_id"])
-        self.borderColor = "rgb(255,255,255)"
-        payload = {"strategy_id":strategy_id, "active":0}
-        response = requests.post("http://127.0.0.1:8000/update-active/", json=payload)
-        self.status = 0
+        pass
 
     def subscribe(self):
-        strategy_id = (self.strategy["strategy_id"])
-        self.borderColor = "rgb(184,255,137)"
-        payload = {"strategy_id":strategy_id, "active":1}
-        response = requests.post("http://127.0.0.1:8000/update-active/", json=payload)
-        self.status = 1
+        pass
 
     def onPaintStrategyDiv(self, div, paint, clipRect):
         strategy = div.strategy
@@ -69,19 +51,19 @@ class StrategyDiv(FCView):
         drawFont = "Default,14"
         paint.drawLine("rgb(255,255,255)", 1.5, 0, 180, 8, 190, 20)
         paint.drawLine("rgb(255,255,255)", 1.5, 0, 190, 8, 180, 20)
-        paint.drawText(str(strategy["symbol"]), "rgb(175,196,228)", drawFont, 60,  1)
+        paint.drawText(str(strategy[2]), "rgb(175,196,228)", drawFont, 60,  1)
         paint.drawText("当前价格", "rgb(175,196,228)", drawFont, 6,  30)
         paint.drawText("9.88", "rgb(255,82,82)", drawFont, 72,  30)
         paint.drawText("策略类型", "rgb(175,196,228)", drawFont, 6,  70)
-        paint.drawText(str(strategy["strategy_type"]), "rgb(255,82,82)", drawFont, 72,  70)
+        paint.drawText(str(strategy[4]), "rgb(255,82,82)", drawFont, 72,  70)
         paint.drawText("策略摘要", "rgb(175,196,228)", drawFont, 6,  110)
-        paint.drawText(strategy["strategy_abstract"], "rgb(255,82,82)", drawFont, 72,  110)
+        paint.drawText(strategy[6], "rgb(255,82,82)", drawFont, 72,  110)
         paint.drawText("通知等级", "rgb(175,196,228)", drawFont, 6,  150)
-        paint.drawText(str(strategy["notify_level"]), "rgb(255,82,82)", drawFont, 72,  150)
+        paint.drawText(str(strategy[7]), "rgb(255,82,82)", drawFont, 72,  150)
         paint.drawText("通知冷却", "rgb(175,196,228)", drawFont, 6,  190)
-        paint.drawText(str(strategy["notify_interval_time"]) + "分钟", "rgb(255,82,82)", drawFont, 72,  190)
+        paint.drawText(str(strategy[8]) + "分钟", "rgb(255,82,82)", drawFont, 72,  190)
         paint.drawText("通知次数", "rgb(175,196,228)", drawFont, 6,  230)
-        paint.drawText( str(strategy["notified_times"]) + "/" + str(strategy["total_notify_times"]), "rgb(255,82,82)", drawFont, 72,  230)
+        paint.drawText( str(strategy[11]) + "/" + str(strategy[10]), "rgb(255,82,82)", drawFont, 72,  230)
         paint.drawText("上次通知", "rgb(175,196,228)", drawFont, 6,  270)
 
     def onPaintStrategyDivBorder(self, view, paint, clipRect):

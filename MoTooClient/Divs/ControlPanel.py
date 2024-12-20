@@ -13,7 +13,7 @@ def drawControlPanel(view, paint, strategy, clipRect):
 	else:
 		drawFont = "Default,14"
 		# paint.drawText((strategy[2].upper()), "rgb(175,196,228)", drawFont, 5,  22 + 20 )
-		if strategy["strategy_type"] == 0:
+		if strategy[4] == 0: # strategy_type
 			strategy_info = ["资产类别","监控资产","策略类型","创建时间","策略摘要","涨破：","跌破：","通知冷却","通知等级","通知次数"]
 			for i in range(0, len(strategy_info)):
 				paint.drawText(strategy_info[i], "rgb(175,196,228)", drawFont, 5,  30 + 40 * i )

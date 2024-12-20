@@ -1,5 +1,5 @@
 import threading
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 import json
 import requests
 import time
@@ -12,6 +12,7 @@ import asyncio
 import notify
 import websockets
 import uvicorn
+import json
 DATABASE = "../MoToo/data/user.db"
 notify_info = []
 
@@ -149,8 +150,8 @@ class BinanceWebSocketClient:
             total_notify_times = strategy["total_notify_times"]
 
             # 打印调试信息
-            print(f"标的 {callback_symbol} 当前价格 {price:.2f} 涨破价格 {up_over} 跌破价格 {down_under} "
-                  f"通知间隔 {time.time() - last_notify_time}")
+            # print(f"标的 {callback_symbol} 当前价格 {price:.2f} 涨破价格 {up_over} 跌破价格 {down_under} "
+                #   f"通知间隔 {time.time() - last_notify_time}")
 
             # 检查通知条件
             if time.time() - last_notify_time < notify_interval_time:
@@ -236,9 +237,76 @@ async def lifespan(app: FastAPI):
 ws_client = BinanceWebSocketClient()
 ws_client.start()
 db_connection = sqlite3.connect(DATABASE, check_same_thread=False)
-db_connection.row_factory = sqlite3.Row
 # 创建 FastAPI 实例并传入 lifespan
 app = FastAPI(lifespan=lifespan)
+
+# 用于管理连接的 WebSocket 客户端
+connected_clients = set()
+'''
+{
+  "action": "get_strategy",
+  "data": {
+    "strategy_id": "12345"
+  }
+}
+'''
+'''
+{
+  "action": "response",
+  "status": "success",
+  "data": {
+    "strategy_id": "12345",
+    "symbol": "BTCUSDT",
+    "strategy_type": 1
+  }
+}
+'''
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    # 接受 WebSocket 连接
+    await websocket.accept()
+    connected_clients.add(websocket)
+    print("Client connected")
+    
+    try:
+        while True:
+            # 接收消息
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            # 处理消息
+            print(f"接到客户端的消息{message}")
+            response = await handle_message(message)
+            
+            # 将响应发送回客户端
+            await websocket.send_text(json.dumps(response))
+    except WebSocketDisconnect:
+        connected_clients.remove(websocket)
+        print("Client disconnected")
+    
+
+async def handle_message(message):
+    """处理客户端发来的 WebSocket 消息"""
+    action = message.get("action")
+    data = message.get("data", {})
+    if action == "get_all_strategy":
+        results = get_all_strategy()
+        return {"action": "get_all_strategy", "status": "success", "message": str(results)}
+    elif action == "start_strategy":
+        result = start_strategy(data)
+        return {"action": "start_strategy", "status": "success", "message": result}
+    elif action == "add_strategy":
+        if add_strategy(data):
+            return {"action": "add_strategy", "status": "success", "message": str(get_all_strategy())}
+    elif action == "update_strategy":
+        message = update_strategy(data)
+        return {"action": "update_strategy", "status": "success", "message": message}
+    elif action == "delete_strategy":
+        if delete_strategy(data):
+            return {"action": "update_strategy", "status": "success", "message": {}}
+    else:
+        return {"action": "response", "status": "error", "message": "Unknown action"}
+    
 
 # GET 接口：使用查询参数获取记录
 @app.get("/get-by-strategy_id/{strategy_id}")
@@ -287,31 +355,23 @@ def read_strategy(active: int):
 
 # 获取全部策略
 @app.get("/get-all-strategy/")
-def read_strategy():
+def get_all_strategy():
     try:
         cursor = db_connection.cursor()
         query = "SELECT * FROM strategy"
         cursor.execute(query,)
         result = cursor.fetchall()
         if result:
-            return (result)
+            return result
         else:
             raise HTTPException(status_code=404, detail="Strategy record not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 #提交策略更改
-class UpdateStrategyRequest(BaseModel):
-    symbol: str
-    strategy_id: str
-    strategy_type: int
-    strategy: str
-    strategy_abstract: str
-    notify_level: int
-    notify_interval_time: int
-    total_notify_times: int
+
 @app.post("/update-strategy/")
-def update_strategy(request: UpdateStrategyRequest):
+def update_strategy(request):
     """
     更新策略信息接口
     参数:
@@ -323,7 +383,8 @@ def update_strategy(request: UpdateStrategyRequest):
     try:
         cursor = db_connection.cursor()
         # 检查 strategy_id 是否存在
-        cursor.execute("SELECT * FROM strategy WHERE strategy_id = ?", (request.strategy_id,))
+        print(request)
+        cursor.execute("SELECT * FROM strategy WHERE strategy_id = ?", (request["strategy_id"],))
         result = cursor.fetchone()
         if not result:
             raise HTTPException(status_code=404, detail="Strategy record not found")
@@ -343,15 +404,15 @@ def update_strategy(request: UpdateStrategyRequest):
         cursor.execute(
             update_query,
             (
-                request.symbol,
-                request.strategy_type,
-                request.strategy,
-                request.strategy_abstract,
-                request.notify_level,
-                request.notify_interval_time,
-                request.total_notify_times,
+                request["symbol"],
+                request["strategy_type"],
+                request["strategy"],
+                request["strategy_abstract"],
+                request["notify_level"],
+                request["notify_interval_time"],
+                request["total_notify_times"],
                 0,
-                request.strategy_id,
+                request["strategy_id"],
             ),
         )
         db_connection.commit()  # 提交事务
@@ -359,11 +420,8 @@ def update_strategy(request: UpdateStrategyRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-class UpdateActiveRequest(BaseModel):
-    strategy_id: str
-    active: int  # 0: 停止, 1: 激活
-@app.post("/update-active/")
-def update_active(request: UpdateActiveRequest):
+
+def start_strategy(request):
     """
     修改策略的 active 状态
     参数: 
@@ -374,7 +432,7 @@ def update_active(request: UpdateActiveRequest):
         cursor = db_connection.cursor()
 
         # 检查 strategy_id 是否存在
-        cursor.execute("SELECT * FROM strategy WHERE strategy_id = ?", (request.strategy_id,))
+        cursor.execute("SELECT * FROM strategy WHERE strategy_id = ?", (request["strategy_id"],))
         result = cursor.fetchone()
         if not result:
             raise HTTPException(status_code=404, detail="Strategy record not found")
@@ -385,46 +443,42 @@ def update_active(request: UpdateActiveRequest):
                 edit_time = strftime('%s', 'now')  -- 更新时间戳
             WHERE strategy_id = ?
         """
-        cursor.execute(update_query, (request.active, request.strategy_id))
+        cursor.execute(update_query, (request["active"], request["strategy_id"]))
         db_connection.commit()  # 提交事务
 
         cursor.execute("SELECT * FROM strategy WHERE active = ?", (1,))
         database_symbols = []
         strategies = cursor.fetchall()
         for item in strategies:
-            database_symbols.append(item["symbol"])
+            database_symbols.append(item[2])
 
         subcirbed_symbols = ws_client.subscribed_streams
 
-        print(f"subcirbed_symbols{subcirbed_symbols}, \ndatabase_symbols{database_symbols}")
-        if request.active == 1:
-            if subcirbed_symbols.count(result["symbol"]) == 1:
+        if request["active"] == 1:
+            if subcirbed_symbols.count(result[2]) == 1: # 2表示symbol
                 print("已经订阅该标的")
                 pass
             else:
                 print("没有订阅的标的，订阅")
-                ws_client.subscribe(result["symbol"])
+                ws_client.subscribe(result[2])
             
-        elif request.active == 0:
-            if database_symbols.count(result["symbol"]) == 1 and subcirbed_symbols.count(result["symbol"]) == 1:
+        elif request["active"] == 0: # active 字段
+            if database_symbols.count(result[1]) == 1 and subcirbed_symbols.count(result[2]) == 1:
                 print("取消订阅")
-                ws_client.unsubscribe(result["symbol"])
+                ws_client.unsubscribe(result[1])
             else:
                 print("无需取消订阅")
         ws_client.strategies = strategies
-        status = "activated" if request.active == 1 else "stopped"
-        return {"detail": f"Strategy {request.strategy_id} successfully {status}"}
+        status = "activated" if request["active"] == 1 else "stopped"
+        return {"detail": f"Strategy {request["strategy_id"]} successfully {status}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
 # 修改密码
 
-# 删除策略接口
-class DeleteStrategyRequest(BaseModel):
-    strategy_id: str
-@app.post("/delete-strategy/")
-def delete_strategy(request: DeleteStrategyRequest):
+
+def delete_strategy(request):
     """
     删除指定策略
     参数:
@@ -433,29 +487,19 @@ def delete_strategy(request: DeleteStrategyRequest):
     try:
         cursor = db_connection.cursor()
         # 检查 strategy_id 是否存在
-        cursor.execute("SELECT * FROM strategy WHERE strategy_id = ?", (request.strategy_id,))
+        cursor.execute("SELECT * FROM strategy WHERE strategy_id = ?", (request["strategy_id"],))
         result = cursor.fetchone()
         if not result:
             raise HTTPException(status_code=404, detail="Strategy record not found")
         # 删除记录
-        cursor.execute("DELETE FROM strategy WHERE strategy_id = ?", (request.strategy_id,))
+        cursor.execute("DELETE FROM strategy WHERE strategy_id = ?", (request["strategy_id"],))
         db_connection.commit()
-        return {"detail": request.strategy_id}
+        return True
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-    
-class AddStrategyRequest(BaseModel):
-    symbol: str
-    wallet: str
-    strategy_type: int
-    strategy: str
-    strategy_abstract: str
-    notify_level: int
-    notify_interval_time: int
-    total_notify_times: int
+
 # 添加策略
-@app.post("/add-strategy/")
-def add_strategy(request: AddStrategyRequest):
+def add_strategy(request):
     """
     添加新策略
     参数:
@@ -470,7 +514,6 @@ def add_strategy(request: AddStrategyRequest):
     """
     try:
         cursor = db_connection.cursor()
-
         # 插入新记录
         insert_query = """
         INSERT INTO strategy (
@@ -483,19 +526,19 @@ def add_strategy(request: AddStrategyRequest):
         cursor.execute(
             insert_query,
             (
-                request.symbol,
-                request.wallet,
-                request.strategy_type,
-                request.strategy,
-                request.strategy_abstract,
-                request.notify_level,
-                request.notify_interval_time,
-                request.total_notify_times,
+                request["symbol"],
+                request["wallet"],
+                request["strategy_type"],
+                request["strategy"],
+                request["strategy_abstract"],
+                request["notify_level"],
+                request["notify_interval_time"],
+                request["total_notify_times"],
             ),
         )
         db_connection.commit()
-
-        return {"detail": "New strategy successfully added"}
+        return True
+    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
@@ -508,12 +551,12 @@ async def task():
     ws_client.strategies = results
     print(len(results))
     for result in results:
-        symbol =  result["symbol"]
+        symbol =  result[2]
         print(symbol)
         if symbol not in ws_client.subscribed_streams:
             print(ws_client.subscribed_streams)
             ws_client.subscribe(symbol)
-            time.sleep(1)
+            time.sleep(0.5)
 
 def start_websocket_client():
     asyncio.run(task())

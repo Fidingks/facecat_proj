@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta http-equiv="pragma" content="no-cache" />
+    <meta http-equiv="Cache-Control" content="no-cache, must-revalidate" />
+    <meta http-equiv="expires" content="0" />
+    <title>FaceCat</title>
+</head>
+<body>
+    <canvas id="mycanvas" width="1000" height="700" style="position: fixed; left: 0px; top: 0px;"/>
+    <script type="text/javascript" src="facecat.js"></script>
+    <script type="text/javascript" src="stock.js"></script>
+    <script type="text/javascript">
+        let canvas = document.getElementById("mycanvas"); //绘图区域
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        let gPaint = new FCPaint(); //绘图对象
+        gPaint.canvas = canvas;
+        scaleCanvas(gPaint);
+        //判断是否移动端
+        gPaint.isMobile = isMobileMode();
+        if (gPaint.isMobile) {
+            gPaint.scaleFactorX = 2.5;
+            gPaint.scaleFactorY = 2.5;
+        }
+        
+        gPaint.defaultUIStyle = "dark";
+        current_strategy = new Array();
+        addDefaultEvent(canvas, gPaint);
+
+        let latestDataStr = "";
+        let findMyCharts = new Array();
+        let charts = new Array();
+        let currentCode = "600000.SH";
+        let clientTicks = new Array();
+        let priceRowMap = new Map();
+        
+        class WebSocketClient{
+            constructor(server_url, on_message_callback=null){
+                this.url = server_url
+                this.connection = null
+                // this.loop = asyncio.new_event_loop()
+                this.thread = null
+                this.on_message_callback = on_message_callback 
+            }
+
+            start() {
+                console.log("启动 WebSocket 客户端...");
+                this.connect();
+            }
+
+            // 连接到服务器
+            connect() {
+                console.log(`尝试连接到服务器: ${this.url}...`);
+                this.connection = new WebSocket(this.url);
+
+                // WebSocket 连接成功时触发
+                this.connection.onopen = () => {
+                    console.log(`成功连接到服务器: ${this.url}`);
+                    this.sendMessage("get_all_strategy", {});
+                };
+
+                // 收到服务器消息时触发
+                this.connection.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    this.on_message_callback(message);
+                    
+                };
+
+                // WebSocket 连接关闭时触发
+                this.connection.onclose = (event) => {
+                    console.log("连接已关闭，尝试重新连接...");
+                    setTimeout(() => this.connect(), this.reconnectDelay); // 自动重连
+                };
+
+                // WebSocket 发生错误时触发
+                this.connection.onerror = (error) => {
+                    console.error("WebSocket 错误:", error);
+                };
+            }
+
+            // 发送消息
+            sendMessage(action, data) {
+                if (this.connection && this.connection.readyState === WebSocket.OPEN) {
+                    const message = JSON.stringify({
+                        action: action,
+                        data: data,
+                    });
+                    this.connection.send(message);
+                    console.log("已发送消息:", message);
+                } else {
+                    console.error("连接尚未建立，无法发送消息");
+                }
+            }
+
+            // 停止 WebSocket 客户端
+            stop() {
+                if (this.connection) {
+                    this.connection.close();
+                    console.log("WebSocket 客户端已停止");
+                }
+            }
+        }
+        // 使用示例
+        const wsClient = new WebSocketClient(
+            "ws://localhost:8000/ws", // 替换为你的 WebSocket 服务器地址
+            (data) => {
+                message = data.message
+                console.log("处理收到的消息:", message);
+                // let jsonCompatibleString = message.replace(/'/g, '"');
+                // // 2. 替换圆括号为方括号
+                // jsonCompatibleString = jsonCompatibleString.replace(/\(/g, "[").replace(/\)/g, "]");
+
+                // // 3. 解析为 JavaScript 数组对象
+                // let parsedData = JSON.parse(jsonCompatibleString);
+
+                // // 4. 如果有嵌套的 JSON 字符串，进一步解析
+                // parsedData = parsedData.map(item => {
+                //     // 第 6 项是嵌套的 JSON 字符串，解析为对象
+                //     item[5] = JSON.parse(item[5]);
+                //     return item;
+                // });
+
+                // // 打印结果
+                // console.log(parsedData);
+            }
+        );
+
+        // 启动客户端
+        wsClient.start();
+        /*
+        * 重绘背景的实现方法
+        * view:视图
+        * paint:绘图对象
+        * clipRect:裁剪区域
+        */
+        gPaint.onPaint = function (view, paint, clipRect) {
+            if(view.viewType == "latestdiv"){
+                drawLatestDiv(view, paint, clipRect);
+            }else if(view.viewType == "control"){
+                drawControlPanel(view, paint, current_strategy, clipRect)
+            }else{
+                onPaintDefault(view, paint, clipRect);
+            }
+        };
+
+        /*
+        * 绘制最新数据
+        */
+        let drawLatestDiv = function (view, paint, clipRect) {
+            let avgHeight = 20;
+            let drawFont = "Default,14";
+            if (gPaint.isMobile) {
+                drawFont = "Default,12";
+            }
+            let dTop = 30;
+            paint.drawLine(view.borderColor, 1, [], 0, dTop, view.size.cx, dTop);
+            var dataStrs = latestDataStr.split(",");
+            let lastClose = 0;
+            let priceList = new Array();
+            let volList = new Array();
+            let buySellTexts = new Array();
+            if (dataStrs.length > 10) {
+                paint.drawText(dataStrs[0], "rgb(175,196,228)", "Default,14", 5, 7);
+                paint.drawText(dataStrs[1], "rgb(194,151,18)", "Default,14", 80, 7);
+                lastClose = parseFloat(dataStrs[8]);
+                priceList.push(parseFloat(dataStrs[23]));
+                priceList.push(parseFloat(dataStrs[22]));
+                priceList.push(parseFloat(dataStrs[21]));
+                priceList.push(parseFloat(dataStrs[20]));
+                priceList.push(parseFloat(dataStrs[19]));
+                priceList.push(parseFloat(dataStrs[9]));
+                priceList.push(parseFloat(dataStrs[10]));
+                priceList.push(parseFloat(dataStrs[11]));
+                priceList.push(parseFloat(dataStrs[12]));
+                priceList.push(parseFloat(dataStrs[13]));
+
+                volList.push(parseFloat(dataStrs[28]));
+                volList.push(parseFloat(dataStrs[27]));
+                volList.push(parseFloat(dataStrs[26]));
+                volList.push(parseFloat(dataStrs[25]));
+                volList.push(parseFloat(dataStrs[24]));
+                volList.push(parseFloat(dataStrs[14]));
+                volList.push(parseFloat(dataStrs[15]));
+                volList.push(parseFloat(dataStrs[16]));
+                volList.push(parseFloat(dataStrs[17]));
+                volList.push(parseFloat(dataStrs[18]));
+            }
+            buySellTexts.push("卖5");
+            buySellTexts.push("卖4");
+            buySellTexts.push("卖3");
+            buySellTexts.push("卖2");
+            buySellTexts.push("卖1");
+            buySellTexts.push("买1");
+            buySellTexts.push("买2");
+            buySellTexts.push("买3");
+            buySellTexts.push("买4");
+            buySellTexts.push("买5");
+            let textColor = "rgb(175,196,228)";
+            if (view.paint.defaultUIStyle == "light") {
+                textColor = "rgb(0,0,0)";
+            }
+            let maxVol = maxValue(volList);
+            for (let i = 0; i < 10; i++) {
+                let tSize = paint.textSize(buySellTexts[i], drawFont);
+                paint.drawText(buySellTexts[i], textColor, drawFont, 5, dTop + avgHeight / 2 - tSize.cy / 2);
+                if (priceList.length > 0) {
+                    let price = priceList[i];
+                    let upDownColor = "rgb(255,82,82)";
+                    let upDownColor2 = "rgba(255,82,82,50)";
+                    if (price < lastClose) {
+                        upDownColor = "rgb(46,255,50)";
+                        upDownColor2 = "rgba(46,255,50,50)";
+                    } 
+                    if (gPaint.isMobile) {
+                        paint.drawText(priceList[i].toFixed(2), upDownColor, drawFont, 40, dTop + avgHeight / 2 - tSize.cy / 2);
+                    } else {
+                        paint.drawText(priceList[i].toFixed(2), upDownColor, drawFont, 50, dTop + avgHeight / 2 - tSize.cy / 2);
+                    }
+                    if (maxVol > 0) {
+                        if (gPaint.isMobile) {
+                            paint.fillRect(upDownColor2, view.size.cx - volList[i] * 50 / maxVol, dTop + 2, view.size.cx, dTop + avgHeight - 2);
+                        } else {
+                            paint.fillRect(upDownColor2, view.size.cx - volList[i] * 80 / maxVol, dTop + 2, view.size.cx, dTop + avgHeight - 2);
+                        }
+                    }
+                    let volText = (volList[i] / 100).toFixed(0);
+                    let volTextSize = paint.textSize(volText, drawFont);
+                    paint.drawText(volText, textColor, drawFont, view.size.cx - volTextSize.cx - 10, dTop + avgHeight / 2 - volTextSize.cy / 2);
+                }
+                dTop += avgHeight;
+            }
+            paint.drawLine(view.borderColor, 1, [], 0, dTop, view.size.cx, dTop);
+            paint.drawText("现价", "rgb(175,196,228)", drawFont, 5, dTop + 10);
+            paint.drawText("幅度", "rgb(175,196,228)", drawFont, 5, dTop + 35);
+            paint.drawText("总额", "rgb(175,196,228)", drawFont, 5, dTop + 60);
+            paint.drawText("总量", "rgb(175,196,228)", drawFont, 5, dTop + 85);
+            paint.drawText("开盘", "rgb(175,196,228)", drawFont, 110, dTop + 10);
+            paint.drawText("振幅", "rgb(175,196,228)", drawFont, 110, dTop + 35);
+            paint.drawText("最高", "rgb(175,196,228)", drawFont, 110, dTop + 60);
+            paint.drawText("最低", "rgb(175,196,228)", drawFont, 110, dTop + 85);
+            if (dataStrs.length > 10) {
+                let close = parseFloat(dataStrs[2]);
+                let high = parseFloat(dataStrs[3]);
+                let low = parseFloat(dataStrs[4]);
+                let open = parseFloat(dataStrs[5]);
+                let volume = parseFloat(dataStrs[6]);
+                let amount = parseFloat(dataStrs[7]);
+                let diff = 0;
+                if(lastClose > 0){
+                    diff = 100 * (close - lastClose) / lastClose;
+                }
+                
+                let diff2 = 0;
+                if(lastClose > 0){
+                    diff2 = 100 * (high - lastClose) / lastClose - 100 * (low - lastClose) / lastClose;
+                }
+                paint.drawText(close.toFixed(2), getPriceColor(close, lastClose), drawFont, 40, dTop + 10);
+                paint.drawText(diff.toFixed(2) + "%", getPriceColor(close, lastClose), drawFont, 40, dTop + 35);
+                paint.drawText((amount / 10000).toFixed(0), textColor, drawFont, 40, dTop + 60);
+                paint.drawText((volume / 10000).toFixed(0), textColor, drawFont, 40, dTop + 85);
+
+                paint.drawText(open.toFixed(2), getPriceColor(open, lastClose), drawFont, 150, dTop + 10);
+                paint.drawText(diff2.toFixed(2) + "%", getPriceColor(close, lastClose), drawFont, 150, dTop + 35);
+                paint.drawText(high.toFixed(2), getPriceColor(high, lastClose), drawFont, 150, dTop + 60);
+                paint.drawText(low.toFixed(2), getPriceColor(low, lastClose), drawFont, 150, dTop + 85);
+            }
+        };
+        let drawControlPanel = function(view, paint, strategy, clipRect){
+            paint.drawText("编辑策略", "rgb(175,196,228)", "Default,18", 45,  10)
+            if (strategy == []){
+                x = view.size.cx
+            }
+            else{
+                drawFont = "Default,14"
+                //paint.drawText((strategy[2].upper()), "rgb(175,196,228)", drawFont, 5,  22 + 20 )
+                if (strategy[4] == 0){ // strategy_type
+                    strategy_info = ["资产类别","监控资产","策略类型","创建时间","策略摘要","涨破：","跌破：","通知冷却","通知等级","通知次数"]
+                    for (let i= 0; i < strategy_info.length; i++){
+                        paint.drawText(strategy_info[i], "rgb(175,196,228)", drawFont, 5,  30 + 40 * i )
+                // for i in range(0, len(strategy)):
+                // paint.drawText(str(strategy[i]), "rgb(175,196,228)", drawFont, 5,  22 + 20 * i)
+                    }
+            }
+            }
+        }
+        let drawControlPanelDefault = function (view, paint, clipRect){
+            view = findViewByName("control", gPaint.views)
+            view.views = new Array()
+            addButton = new FCButton()
+            addButton.font = "Default,14"
+            addButton.location = new FCPoint(50,200)
+            addViewToParent(addButton,  view)
+            addButton.text = "添加策略"
+            // addButton.onClick = AddStrategyToAll
+        }
+        /*
+         * 重置大小
+         */
+        let resizeAll = function () {
+            try {
+                canvas.width = document.documentElement.clientWidth;
+                canvas.height = document.documentElement.clientHeight;
+                scaleCanvas(gPaint);
+                updateViewDefault(gPaint.views);
+            } catch (err) {
+                
+            }
+            invalidate(gPaint);
+        };
+
+
+        /*
+        * 监听大小改变
+        */
+        window.onresize = function () {
+            resizeAll();
+        };
+
+        /*
+        * 旋转监听
+        */
+        window.onorientationchange = function () {
+            resizeAll();
+        };
+
+        /*
+        * 创建列
+        * grid:表格
+        */
+        let createGridCell = function (grid) {
+            let gridCell = new FCGridCell();
+            if (grid.paint.defaultUIStyle == "dark") {
+                gridCell.backColor = "none";
+                gridCell.borderColor = "none";
+                gridCell.textColor = "rgb(175,196,228)";
+            } else if (grid.paint.defaultUIStyle == "light") {
+                gridCell.backColor = "none";
+                gridCell.borderColor = "none";
+                gridCell.textColor = "rgb(0,0,0)";
+            }
+            gridCell.font = "Default,13";
+            return gridCell;
+        };
+
+        /*
+        *获取价格颜色
+        */
+        let getPriceColor = function(price, comparePrice){
+            if (price != 0)
+            {
+                if (price > comparePrice)
+                {
+                    return "rgb(255,82,82)";
+                }
+                else if (price < comparePrice)
+                {
+                    return "rgb(46,255,50)";
+                }
+            }
+            return "rgb(190,190,235)";
+        };
+
+        /*
+        * 根据名称查找视图
+        * name:名称
+        * views:视图集合
+        */
+        let findViewsByType = function (findType, views, refViews) {
+            let size = views.length;
+            for (let i = 0; i < size; i++) {
+                let view = views[i];
+                if (view.viewType == findType) {
+                    refViews.push(view);
+                } else {
+                    if (view.views) {
+                        findViewsByType(findType, view.views, refViews);
+                    }
+                }
+            }
+        };
+       
+        /*
+        * 黑色风格
+        */
+        let toBlackChart = function (chart, index) {
+            chart.paint.defaultUIStyle = "dark";
+            chart.backColor = "rgb(0,0,0)";
+            chart.borderColor = "none";
+            chart.textColor = "rgb(175,196,228)";
+            chart.scaleColor = "rgb(75,75,75)";
+            chart.crossTipColor = "rgb(50,50,50)";
+            chart.crossLineColor = "rgb(100,100,100)";
+            chart.gridColor = "rgb(50,50,50)";
+            if(index > 0){
+                chart.upColor = "rgb(186,56,18)";
+                chart.downColor = "rgb(31,182,177)";
+            }else{
+                chart.upColor = "rgb(255,82,82)";
+                chart.downColor = "rgb(46,255,50)";
+            }
+            chart.barStyle = "rect2";
+            chart.candleStyle = "rect2";
+            chart.trendColor = "rgb(255,255,255)";
+            chart.hScaleTextColor = "rgb(194,151,18)";
+            chart.vScaleTextColor = "rgb(194,151,18)";
+        };
+
+        /*
+        * 设置图表的标题
+        */
+        let setChartTitle = function(chart, code, name, intCycle){
+            chart.text = code + " " + name;
+            if(intCycle == 0){
+                chart.text += " 分时";
+            }else if(intCycle < 1440){
+                chart.text += " " + intCycle.toString() + "分钟";
+            }else if(intCycle == 1440){
+                chart.text += " 日线";
+            }else if(intCycle == 10080){
+                chart.text += " 周线";
+            }else if(intCycle == 43200){
+                chart.text += " 月线";
+            }else if(intCycle == 129600){
+                chart.text += " 季线";
+            }else if(intCycle == 259200){
+                chart.text += " 半年线";
+            }else if(intCycle == 518400){
+                chart.text += " 年线";
+            }
+        };
+
+        /*
+        * 点击单元格事件
+        * grid 表格
+        * row 行
+        * gridColumn 列
+        * cell 单元格
+        * firstTouch:是否第一次触摸
+        * secondTouch:是否第二次触摸
+        * firstPoint:第一次触摸的坐标
+        * secondPoint:第二次触摸的坐标
+        */
+        gPaint.onClickGridCell = function (grid, row, gridColumn, cell, firstTouch, firstPoint, secondTouch, secondPoint, clicks) {
+            let code = row.cells[1].value;
+            let name = row.cells[2].value;
+            queryHistoryData(code, name, 0, findMyCharts);
+            queryHistoryData(code, name, 1, findMyCharts);
+            queryHistoryData(code, name, 1440, findMyCharts);
+            currentCode = code;
+            queryNewData();
+            invalidate(grid.paint);
+        };
+
+        /*
+        * 点击方法
+        * view:视图
+        * firstTouch:是否第一次触摸
+        * firstPoint:第一次触摸的坐标
+        * secondTouch:是否第二次触摸
+        * secondPoint:第二次触摸的坐标
+        * clicks:点击次数
+        */
+        gPaint.onClick = function (view, firstTouch, firstPoint, secondTouch, secondPoint, clicks) {
+            onClickDefault(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks);
+            if(view.viewName && view.viewName.indexOf("cycle,") == 0){
+                let strs = view.viewName.split(",");
+                let index = parseInt(strs[1]);
+                let cycleInt = parseInt(strs[2]);
+                let myChart = findMyCharts[index];
+                myChart.exAttributes.set("cycle", cycleInt);
+                let queryCycle = 0;
+                if(cycleInt > 0 && cycleInt < 1440){
+                    queryCycle = 1;
+                }else if(cycleInt >= 1440){
+                    queryCycle = 1440;
+                }
+                let myCharts = new Array();
+                myCharts.push(myChart);
+                let chart = charts[index];
+                let code = chart.text.split(" ")[0];
+                let name = chart.text.split(" ")[1];
+                queryHistoryData(code, name, queryCycle, myCharts);
+            }
+            else if(view.viewName == "allStrategy"){
+                console.log("点击策略试图")
+                current_strategy = []
+                drawControlPanelDefault(current_strategy)
+                invalidate(gPaint)
+            }
+
+        };
+
+        /*
+        * 请求报价数据
+        */
+        let queryPrice = function(){
+            let url = "http://110.42.188.197:9968/quote?func=price&codes=all&count=200";
+            let xmlhttp = new XMLHttpRequest();
+            xmlhttp.open("GET", url, true);
+            xmlhttp.onreadystatechange = function () {
+                if (xmlhttp.readyState === 4 && xmlhttp.status === 200) {
+                    let result = xmlhttp.responseText;
+                    let strs = result.split("\r\n");
+                    for(let i = 0; i < strs.length; i++){
+                        let subStrs = strs[i].split(",");
+                        if(subStrs.length >= 15){
+                            let code = subStrs[0];
+                            let row = null;
+                            let cell1 = null;
+                            let cell2 = null;
+                            let cell3 = null;
+                            let cell4 = null;
+                            let cell5 = null;
+                            let cell6 = null;
+                            let cell7 = null;
+                            let cell8 = null;
+                            let cell9 = null;
+                            let cell10 = null;
+                            let cell11 = null;
+                            let cell12 = null;
+                            let cell13 = null;
+                            let cell14 = null;
+                            let cell15 = null;
+                            let cell16 = null;
+                            let cell17 = null;
+                            let cell18 = null;
+                            let cell19 = null;
+                            let cell20 = null;
+                            let cell21 = null;
+                            let cell22 = null;
+                            if(priceRowMap.has(code)){
+                                row = priceRowMap.get(code);
+                                cell1 = row.cells[0];
+                                cell2 = row.cells[1];
+                                cell3 = row.cells[2];
+                                cell4 = row.cells[3];
+                                cell5 = row.cells[4];
+                                cell6 = row.cells[5];
+                                cell7 = row.cells[6];
+                                cell8 = row.cells[7];
+                                cell9 = row.cells[8];
+                                cell10 = row.cells[9];
+                                cell11 = row.cells[10];
+                                cell12 = row.cells[11];
+                                cell13 = row.cells[12];
+                                cell14 = row.cells[13];
+                                cell15 = row.cells[14];
+                                cell16 = row.cells[15];
+                                cell17 = row.cells[16];
+                                cell18 = row.cells[17];
+                                cell19 = row.cells[18];
+                                cell20 = row.cells[19];
+                                cell21 = row.cells[20];
+                                cell22 = row.cells[21];
+                            }else{
+                                row = new FCGridRow();
+                                priceRowMap.set(code, row);
+                                gridStocks.rows.push(row);
+                                cell1 = createGridCell(gridStocks);
+                                row.cells.push(cell1);
+                                cell2 = createGridCell(gridStocks);
+                                row.cells.push(cell2);
+                                cell3 = createGridCell(gridStocks);
+                                row.cells.push(cell3);
+                                cell4 = createGridCell(gridStocks);
+                                row.cells.push(cell4);
+                                cell5 = createGridCell(gridStocks);
+                                row.cells.push(cell5);
+                                cell6 = createGridCell(gridStocks);
+                                row.cells.push(cell6);
+                                cell7 = createGridCell(gridStocks);
+                                row.cells.push(cell7);
+                                cell8 = createGridCell(gridStocks);
+                                row.cells.push(cell8);
+                                cell9 = createGridCell(gridStocks);
+                                row.cells.push(cell9);
+                                cell10 = createGridCell(gridStocks);
+                                row.cells.push(cell10);
+                                cell11 = createGridCell(gridStocks);
+                                row.cells.push(cell11);
+                                cell12 = createGridCell(gridStocks);
+                                row.cells.push(cell12);
+                                cell13 = createGridCell(gridStocks);
+                                row.cells.push(cell13);
+                                cell14 = createGridCell(gridStocks);
+                                row.cells.push(cell14);
+                                cell15 = createGridCell(gridStocks);
+                                row.cells.push(cell15);
+                                cell16 = createGridCell(gridStocks);
+                                row.cells.push(cell16);
+                                cell17 = createGridCell(gridStocks);
+                                row.cells.push(cell17);
+                                cell18 = createGridCell(gridStocks);
+                                row.cells.push(cell18);
+                                cell19 = createGridCell(gridStocks);
+                                row.cells.push(cell19);
+                                cell20 = createGridCell(gridStocks);
+                                row.cells.push(cell20);
+                                cell21 = createGridCell(gridStocks);
+                                row.cells.push(cell21);
+                                cell22 = createGridCell(gridStocks);
+                                row.cells.push(cell22);
+                                cell1.value = gridStocks.rows.length;
+
+                                cell2.value = subStrs[0];
+                                cell2.textColor = "rgb(194,151,18)";
+                                
+                                cell3.value = subStrs[1];
+                            }
+                            let close = parseFloat(subStrs[2]);
+                            let high = parseFloat(subStrs[3]);
+                            let low =  parseFloat(subStrs[4]);
+                            let lastClose = parseFloat(subStrs[8]);
+                            cell4.value = close.toFixed(2);
+                            cell4.textColor = getPriceColor(close, lastClose);
+                            
+                            let diff = 0;
+                            if(lastClose > 0){
+                                diff = 100 * (close - lastClose) / lastClose;
+                            }
+                            cell5.value = diff.toFixed(2) + "%";
+                            cell5.textColor = getPriceColor(diff, 0);
+
+                            cell6.value = (close - lastClose).toFixed(2);
+                            cell6.textColor = getPriceColor(close, lastClose);
+
+                            let volume = parseFloat(subStrs[6]);
+                            let amount = parseFloat(subStrs[7]);
+                            cell7.value = (volume / 100 / 10000).toFixed(2) + "万";
+
+                            cell8.value = (amount / 100000000).toFixed(2) + "亿";
+
+                            cell9.value = parseFloat(subStrs[12]).toFixed(2);
+
+                            cell10.value = parseFloat(subStrs[11]).toFixed(2);
+
+                            let diff2 = 0;
+                            if(lastClose > 0){
+                                diff2 = 100 * (high - lastClose) / lastClose - 100 * (low - lastClose) / lastClose;
+                            }
+                            cell11.value = diff2.toFixed(2) + "%";
+
+                            cell12.value = parseFloat(subStrs[13]).toFixed(2);
+
+                            let marketValue = parseFloat(subStrs[9]) * close;
+                            cell13.value = (marketValue / 100000000).toFixed(2) + "亿";
+
+                            let flowValue = parseFloat(subStrs[10]) * close;
+                            cell14.value = (flowValue / 100000000).toFixed(2) + "亿";
+
+                            cell15.value = "";
+
+                            let upperLimit = parseFloat(subStrs[14]);
+                            let lowerLimit = parseFloat(subStrs[15]);
+                            cell16.value = upperLimit.toFixed(2);
+                            cell16.textColor = getPriceColor(1, 0);
+
+                            cell17.value = lowerLimit.toFixed(2);
+                            cell17.textColor = getPriceColor(0, 1);
+
+                            cell18.value = "";
+
+                            cell19.value = "";
+
+                            cell20.value = "";
+
+                            cell21.value = "";
+
+                            cell22.value = "";
+                        }
+                    }
+                    invalidateView(gridStocks);
+                }
+            }
+            xmlhttp.send(null);
+        };
+
+        /*
+        * 请求最新数据
+        */
+        let queryNewData = function(){
+            let url = "http://110.42.188.197:9968/quote?func=getnewdata&codes=" + currentCode;
+            let xmlhttp = new XMLHttpRequest();
+            xmlhttp.open("GET", url, true);
+            xmlhttp.onreadystatechange = function () {
+                if (xmlhttp.readyState === 4 && xmlhttp.status === 200) {
+                    let result = xmlhttp.responseText;
+                    latestDataStr = result;
+                    var dataStrs = latestDataStr.split(",");
+                    if(dataStrs.length > 0){
+                        let code = dataStrs[0];
+                        let close = parseFloat(dataStrs[2]);
+                        let volume = parseFloat(dataStrs[6]);
+                        let amount = parseFloat(dataStrs[7]);
+                        let date = new Date(dataStrs[29].replace("\r\n", "")).getTime();
+                        for(let c = 0; c < findMyCharts.length; c++){
+                            let myChart = findMyCharts[c];
+                            let chart = charts[c];
+                            if(code == chart.text.split(" ")[0]){
+                                if(chart.datas && chart.datas.length > 0){
+                                    let myCycle = parseInt(myChart.exAttributes.get("cycle"));
+                                    let latestData = new SecurityData();
+                                    latestData.close = close;
+                                    latestData.open = latestData.close;
+                                    latestData.high = latestData.close;
+                                    latestData.low = latestData.close;
+                                    latestData.volume = volume;
+                                    latestData.amount = amount;
+                                    latestData.date = date;
+                                    let cTick = clientTicks[c];
+                                    if(cTick.code.length == 0){
+                                        cTick.code = currentCode;
+                                        cTick.lastAmount = amount;
+                                        cTick.lastVolume = volume;
+                                        cTick.lastDate = latestData.date;
+                                    }
+                                    let oldDataSize = chart.datas.length;
+                                    mergeLatestData(currentCode, chart.datas, latestData, cTick, myCycle);
+                                    if(myCycle == 0){
+                                        for(let d = 0; d < chart.datas.length; d++){
+                                            if(chart.datas[d].volume > 0){
+                                                chart.lastValidIndex = d;
+                                            }
+                                        }
+                                    }
+                                    if(chart.lastRecordIsVisible){
+                                        let newDataSize = chart.datas.length;
+                                        if(newDataSize > oldDataSize){
+                                            chart.firstVisibleIndex = chart.firstVisibleIndex + 1;
+                                            chart.lastVisibleIndex = chart.lastVisibleIndex + 1;
+                                        }
+                                    }
+                                    checkChartLastVisibleIndex(chart);
+                                    calcChartIndicator(chart);
+                                }
+                            }
+                        }
+                    }
+                    invalidate(gPaint);
+                }
+            }
+            xmlhttp.send(null);
+        };
+        
+        /*
+        * 请求历史数据
+        */
+        let queryHistoryData = function (code, name, cycle, myCharts) {
+            let url = "http://110.42.188.197:9968/quote?func=getkline&code=" + code +  "&cycle=" + cycle.toString() + "&count=5000";
+            if(cycle == 0){
+                url = "http://110.42.188.197:9968/quote?func=getkline&code=" + code +  "&cycle=0&count=240";
+            }
+            let xmlhttp = new XMLHttpRequest();
+            xmlhttp.open("GET", url, true);
+            xmlhttp.onreadystatechange = function () {
+                if (xmlhttp.readyState === 4 && xmlhttp.status === 200) {
+                    let result = xmlhttp.responseText;
+                    let strs = result.split("\r\n");
+                    let dataList = new Array();
+                    //分时线处理
+                    for(let c = 0; c < myCharts.length; c++){
+                        let myChart = myCharts[c];
+                        let chart = myChart.views[0].secondView.views[0];
+                        let myCycle = parseInt(myChart.exAttributes.get("cycle"));
+                        if(myCycle == 0){
+                            if(cycle == 0){
+                                let fStrs = strs[0].split(" ");
+                                if(fStrs.length >= 3){
+                                    chart.firstOpen = parseFloat(fStrs[2]);
+                                }else{
+                                    chart.firstOpen = 0;
+                                }
+                            }
+                        }else{
+                           chart.firstOpen = 0;
+                        }
+                    }
+                    for(let i = 2; i < strs.length; i++){
+                        let subStrs = strs[i].split(",");
+                        if(subStrs.length >= 7){
+                            let data = new SecurityData();
+                            if(cycle < 1440){
+                                let date = new Date(subStrs[0] + " " + subStrs[1].substring(0, 2) + ":" + subStrs[1].substring(2, 4) + ":00");
+                                data.open = parseFloat(subStrs[2]);
+                                data.high = parseFloat(subStrs[3]);
+                                data.low = parseFloat(subStrs[4]);
+                                data.close = parseFloat(subStrs[5]);
+                                data.volume = parseFloat(subStrs[6]);
+                                data.date = date.getTime();
+                                //分时线处理
+                                if(cycle == 0 && (data.volume > 0 || dataList.length == 0)){
+                                    for(let c = 0; c < myCharts.length; c++){
+                                        let myChart = myCharts[c];
+                                        let myCycle = parseInt(myChart.exAttributes.get("cycle"));
+                                        if(myCycle == 0){
+                                            let chart = myChart.views[0].secondView.views[0];
+                                            chart.lastValidIndex = dataList.length;
+                                            if(chart.firstOpen == 0){
+                                                chart.firstOpen = data.close;
+                                            }
+                                        }
+                                    }
+                                }
+                            }else{
+                                let date = new Date(subStrs[0]);
+                                data.open = parseFloat(subStrs[1]);
+                                data.high = parseFloat(subStrs[2]);
+                                data.low = parseFloat(subStrs[3]);
+                                data.close = parseFloat(subStrs[4]);
+                                data.volume = parseFloat(subStrs[5]);
+                                data.date = date.getTime();
+                            }
+                            dataList.push(data);
+                        }
+                    }
+                    for(let c = 0; c < myCharts.length; c++){
+                        let myChart = myCharts[c] ;
+                        let myCycle = parseInt(myChart.exAttributes.get("cycle"));
+                        let chart = myChart.views[0].secondView.views[0];
+                        let copyDatas = [];
+                        for(let d = 0; d < dataList.length; d++){
+                            copyDatas.push(dataList[d]);
+                        }
+                        //分时线
+                        if(cycle == 0 && myCycle == 0){
+                            chart.autoFillHScale = true;
+                            chart.cycle = "trend";
+                        }
+                        //分钟线
+                        else if(cycle == 1 && (myCycle > 0 && myCycle < 1440)){
+                            chart.cycle = "minute";
+                            if(myCycle > 1){
+                                let newDatas = []; 
+                                multiMinuteSecurityDatas(newDatas, copyDatas, myCycle);
+                                copyDatas = newDatas;
+                            }
+                        }
+                        //日线
+                        else if(cycle == 1440 && myCycle >= 1440){
+                            chart.cycle = "day";
+                            if(myCycle == 10080){
+                                let newDatas = []; 
+                                getHistoryWeekDatas(newDatas, copyDatas);
+                                copyDatas = newDatas;
+                            }else if(myCycle == 43200){
+                                let newDatas = []; 
+                                getHistoryMonthDatas(newDatas, copyDatas);
+                                copyDatas = newDatas;
+                            }else if(myCycle == 129600){
+                                let newDatas = []; 
+                                getHistorySeasonDatas(newDatas, copyDatas);
+                                copyDatas = newDatas;
+                            }else if(myCycle == 259200){
+                                let newDatas = []; 
+                                getHistoryHalfYearDatas(newDatas, copyDatas);
+                                copyDatas = newDatas;
+                            }else if(myCycle == 518400){
+                                let newDatas = []; 
+                                getHistoryYearDatas(newDatas, copyDatas);
+                                copyDatas = newDatas;
+                            }
+                        }
+                        //不符合的K线
+                        else{
+                            continue;
+                        }
+                        clientTicks[c] = new ClientTickDataCache();
+                        setChartTitle(chart, code, name, myCycle);
+                        chart.lastVisibleKey = 0;
+                        chart.firstVisibleIndex = -1;
+                        chart.lastVisibleIndex = -1;
+                        chart.datas = copyDatas;
+                        let maxVisibleRecord = getChartMaxVisibleCount(chart, chart.hScalePixel, getChartWorkAreaWidth(chart));
+                        chart.lastVisibleIndex = chart.datas.length - 1;
+                        if (maxVisibleRecord > chart.datas.length) {
+                            chart.firstVisibleIndex = 0;
+                        } else {
+                            chart.firstVisibleIndex = chart.lastVisibleIndex - maxVisibleRecord + 1;
+                        }
+                        resetChartVisibleRecord(chart);
+                        checkChartLastVisibleIndex(chart);
+                        calcChartIndicator(chart);
+                        invalidateView(chart);
+                    }
+                }
+            }
+            xmlhttp.send(null);
+        };
+
+        /**
+         * 绘制图表提示
+         * chart:图表
+         * paint:绘图对象
+         * clipRect:裁剪区域
+         */
+         let drawChartTip = function(chart, paint, clipRect){
+            if (paint.touchMoveView == chart && chart.cycle != "trend"){
+                let crossLineIndex = chart.crossStopIndex;
+                let str = "A" + crossLineIndex;
+                if (str != "ANaN" && crossLineIndex != -1 && crossLineIndex >= chart.firstVisibleIndex && crossLineIndex <= chart.lastVisibleIndex) {
+                    let mp = chart.touchPosition;
+                    let cmp = new FCPoint(mp.x + 5, mp.y);
+                    let width = 105, height = 125;
+                    let tipRect = new FCRect(cmp.x, cmp.y, cmp.x + width, cmp.y + height);
+                    if(tipRect.left < 0){
+                        tipRect.left = 0;
+                        tipRect.right = width;
+                    }
+                    if(tipRect.right > chart.size.cx){
+                        tipRect.left = chart.size.cx - width;
+                        tipRect.right = tipRect.left + width;
+                    }
+                    if(tipRect.bottom > chart.size.cy){
+                        tipRect.top = chart.size.cy - height;
+                        tipRect.bottom = tipRect.top + height;
+                    }
+                    let sData = chart.datas[crossLineIndex];
+                    let high = sData.high;
+                    let low = sData.low;
+                    let highY = getChartY(chart, 0, high);
+                    let lowY = getChartY(chart, 0, low);
+                    if(cmp.y >= highY && cmp.y <= lowY){
+                        paint.fillRect("rgb(50,50,50)", tipRect.left, tipRect.top, tipRect.right, tipRect.bottom);
+                        let close = sData.close;
+                        let open = sData.open;
+                        let volume = sData.volume;
+                        let lastClose = sData.open;
+                        if(crossLineIndex > 0){
+                            lastClose = chart.datas[crossLineIndex - 1].close;
+                        }
+                        let date = new Date();
+			            date.setTime(sData.date);
+                        let xText = "";
+                        if (chart.cycle == "day") {
+                            xText = dateFormat("YYYY-mm-dd", date);
+                        } else if (chart.cycle == "minute") {
+                            xText = dateFormat("YYYY-mm-dd HH:MM", date);
+                        } 
+                        let xFont = "Default,13";
+                        paint.drawText(xText, chart.textColor, xFont, tipRect.left + 5, tipRect.top + 5);
+                        paint.drawText("高:", chart.textColor, xFont, tipRect.left + 5, tipRect.top + 25);
+                        paint.drawText(high.toFixed(chart.candleDigit), getPriceColor(high, lastClose), xFont, tipRect.left + 25, tipRect.top + 25);
+                        paint.drawText("开:", chart.textColor, xFont, tipRect.left + 5, tipRect.top + 45);
+                        paint.drawText(open.toFixed(chart.candleDigit), getPriceColor(open, lastClose), xFont, tipRect.left + 25, tipRect.top + 45);
+                        paint.drawText("低:", chart.textColor, xFont, tipRect.left + 5, tipRect.top + 65);
+                        paint.drawText(low.toFixed(chart.candleDigit), getPriceColor(low, lastClose), xFont, tipRect.left + 25, tipRect.top + 65);
+                        paint.drawText("收:", chart.textColor, xFont, tipRect.left + 5, tipRect.top + 85);
+                        paint.drawText(close.toFixed(chart.candleDigit), getPriceColor(close, lastClose), xFont, tipRect.left + 25, tipRect.top + 85);
+                        paint.drawText("量:", chart.textColor, xFont, tipRect.left + 5, tipRect.top + 105);
+                        paint.drawText(volume.toFixed(0), "rgb(80,255,255)", xFont, tipRect.left + 25, tipRect.top + 105);
+                    }
+                }
+            }
+        };
+
+        //解析加载XML
+        let xml = `<?xml version="1.0" encoding="utf-8" ?>
+        <html xmlns="facecat">
+        <body>
+            <div bordercolor="none" name="divInner" dock="fill">
+                <div type="tab" dock="fill" selectedindex="0" backcolor="none" bordercolor="none"
+                name="tabFunc">
+                    <div type="tabpage" text="主界面" name="divMain" backcolor="none">
+                    <div type="splitlayout" layoutstyle="lefttoright" bordercolor="none" dock="fill"
+                            size="650,510" candragsplitter="true" splitterposition="650,1" name="divCodingRight2">
+                            <table name="gridStocks" headerheight="30" dock="fill"
+                                gridlinecolor="none" bordercolor="none" showvscrollbar="true" showhscrollbar="true"
+                                allowpreviewsevent="true" allowdragscroll="true">
+                                <tr>
+                                    <th name="colP0" text="序" width="40" allowdrag="true" allowresize="true"/>
+                                    <th name="colP1" text="代码" width="70" allowdrag="true" allowresize="true"/>
+                                    <th name="colP2" text="名称" width="70" allowdrag="true" allowresize="true" />
+                                    <th name="colP3" text="现价" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP4" text="涨幅" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP5" text="涨跌" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP9" text="总量" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP10" text="总额" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP11" text="量比" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP12" text="PE动" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP13" text="振幅" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP14" text="换手率" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP15" text="总市值" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP16" text="流值" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP17" text="行业分类板块" width="80" allowdrag="true" allowresize="true" cellalign="center"/>
+                                    <th name="colP18" text="涨停价" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP19" text="跌停价" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP20" text="金比" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP21" text="涨跌比" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP22" text="涨速" width="60" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP23" text="净资产收益率" width="100" allowdrag="true" allowresize="true" cellalign="right"/>
+                                    <th name="colP24" text="自设指标" width="80" allowdrag="true" allowresize="true" cellalign="right"/>
+                                </tr>
+                            </table>
+                            <div type="splitlayout" layoutstyle="toptobottom" bordercolor="none" dock="fill"
+                                size="400,400" candragsplitter="true" splitterposition="380,1">
+                                <div type="splitlayout" layoutstyle="righttoleft" bordercolor="none" dock="fill"
+                                    size="400,400" candragsplitter="true" splitterposition="200,1">
+                                    <div type="custom" cid="latestdiv" name="divLatest"/>
+                                    <div type="custom" cid="mychart" name="mainChart1" cycle="0" candledivpercent="0.7"
+                                            voldivpercent="0.3" backcolor="none" bordercolor="none"/>
+                                </div>
+                                <div type="splitlayout" layoutstyle="lefttoright" bordercolor="none" dock="fill"
+                                    size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="200,1">
+                                    <div type="custom" cid="mychart" name="mainChart2" cycle="5" candledivpercent="0.7"
+                                            voldivpercent="0.3" backcolor="none" bordercolor="none"/>
+                                    <div type="custom" cid="mychart" name="mainChart3" cycle="1440" candledivpercent="0.7"
+                                            voldivpercent="0.3" backcolor="none" bordercolor="none"/>
+                                </div>
+                            </div>
+                        </div>
+                        </div>
+                        <div type="tabpage" text="多K线" name="divMulti" backcolor="none">
+                            <div type="splitlayout" layoutstyle="lefttoright" backcolor="none" bordercolor="none"
+                                dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="133,1">
+                                <div type="splitlayout" layoutstyle="toptobottom" backcolor="none" bordercolor="none"
+                                    dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="267,1">
+                                    <div type="splitlayout" layoutstyle="toptobottom" backcolor="none" bordercolor="none"
+                                        dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="200,1">
+                                        <div type="custom" cid="mychart" name="chart1" cycle="1" nativerefresh="true" candledivpercent="1"
+                                            voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                        <div type="custom" cid="mychart" name="chart2" cycle="5" nativerefresh="true" candledivpercent="1"
+                                            voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                    </div>
+                                    <div type="custom" cid="mychart" name="chart3" cycle="10" nativerefresh="true" candledivpercent="1"
+                                        voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                </div>
+                                <div type="splitlayout" layoutstyle="lefttoright" backcolor="none" bordercolor="none"
+                                    dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="200,1">
+                                    <div type="splitlayout" layoutstyle="toptobottom" backcolor="none" bordercolor="none"
+                                        dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="267,1">
+                                        <div type="splitlayout" layoutstyle="toptobottom" backcolor="none" bordercolor="none"
+                                            dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="200,1">
+                                            <div type="custom" cid="mychart" name="chart4" cycle="15" nativerefresh="true" candledivpercent="1"
+                                                voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                            <div type="custom" cid="mychart" name="chart5" cycle="20" nativerefresh="true" candledivpercent="1"
+                                                voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                        </div>
+                                        <div type="custom" cid="mychart" name="chart6" cycle="30" nativerefresh="true" candledivpercent="1"
+                                            voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                    </div>
+                                    <div type="splitlayout" layoutstyle="toptobottom" backcolor="none" bordercolor="none"
+                                        dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="267,1">
+                                        <div type="splitlayout" layoutstyle="toptobottom" backcolor="none" bordercolor="none"
+                                            dock="fill" size="400,400" candragsplitter="true" splitmode="percentsize" splitterposition="200,1">
+                                            <div type="custom" cid="mychart" name="chart7" cycle="1440" nativerefresh="true"
+                                                candledivpercent="1" voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                            <div type="custom" cid="mychart" name="chart8" cycle="10080" nativerefresh="true"
+                                                candledivpercent="1" voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                        </div>
+                                        <div type="custom" cid="mychart" name="chart9" cycle="43200" nativerefresh="true"
+                                            candledivpercent="1" voldivpercent="0" backcolor="none" bordercolor="none"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div type="tabpage" text="监控面板" name="monitor_page" backcolor="none">
+                            <div type="splitlayout" layoutstyle="righttoleft" bordercolor="none" dock="fill" size="400,400" candragsplitter="true"  splitterposition="200,1" allowresize="false">
+                                <div type="custom" cid="control" name="control">
+
+                                <input type="text" name="TextBox" location="100,100" size="100,25"/>
+                                </div>
+                                <div type="div" name="allStrategy" showhscrollbar="true" showvscrollbar="true" topMost="true">
+                                </div>
+                                
+                            </div >
+                        </div>
+                    </div>
+                </div>
+        </body>
+        </html>`;
+        renderFaceCat(gPaint, xml);
+        let gridStocks = findViewByName("gridStocks", gPaint.views);
+        for(let i = 3; i < gridStocks.columns.length; i++){
+            gridStocks.columns[i].cellAlign = "right";
+        }
+        gridStocks.selectedRowColor = "rgb(75,75,75)";
+        gridStocks.alternateRowColor = "rgb(25,25,25)";
+        queryPrice();
+        let stockName = "浦发银行";
+        findViewsByType("mychart", gPaint.views, findMyCharts);
+        for(let i = 0; i < findMyCharts.length; i++){
+            let myChart = findMyCharts[i];
+            let splitDiv = new FCSplitLayoutDiv();
+            splitDiv.layoutStyle = "toptobottom";
+            splitDiv.size = new FCSize(400, 400);
+            splitDiv.backColor = "none";
+            splitDiv.borderColor = "none";
+            splitDiv.dock = "fill";
+            addViewToParent(splitDiv, myChart);
+
+            let topDiv = new FCLayoutDiv();
+            topDiv.backColor = "none";
+            topDiv.borderColor = "none";
+            topDiv.layoutStyle = "lefttoright";
+            topDiv.showHScrollBar = false;
+
+            let bottomDiv = new FCDiv();
+            bottomDiv.backColor = "none";
+            bottomDiv.borderColor = "none";
+            addViewToSplit(splitDiv, topDiv, bottomDiv, 30)
+            if(i == 0){
+                splitDiv.splitter.location = new FCPoint(0, 0);
+            }
+            let chart = new FCChart();
+            chart.leftVScaleWidth = 70;
+            chart.rightVScaleWidth = 70;
+            if(i > 0){
+                chart.leftVScaleWidth = 0;
+            }
+            chart.vScaleDistance = 35;
+            chart.hScalePixel = 11;
+            chart.hScaleHeight = 30;
+            chart.candlePaddingTop = 30;
+            chart.candlePaddingBottom = 20;
+            chart.volPaddingTop = 20;
+            chart.volPaddingBottom = 0;
+            chart.vScaleDistance = 35;
+            chart.dock = "fill";
+            chart.font = "Default,12";
+            chart.candleDivPercent = parseFloat(myChart.exAttributes.get("candledivpercent"));
+            chart.volDivPercent = parseFloat(myChart.exAttributes.get("voldivpercent"));
+            chart.indDivPercent = 0;
+            if (gPaint.isMobile) {
+                chart.rightVScaleWidth = 0;
+                chart.leftVScaleWidth = 60;
+            }
+            chart.text = currentCode + " " + stockName;
+            chart.allowDragChartDiv = true;
+            charts.push(chart);
+            chart.onPaintChartTip = drawChartTip;
+            clientTicks.push(new ClientTickDataCache());
+            addViewToParent(chart, bottomDiv);
+            toBlackChart(chart, i);
+            let cycles = new Array();
+            cycles.push("1");
+            cycles.push("5");
+            cycles.push("10");
+            cycles.push("15");
+            cycles.push("20");
+            cycles.push("30");
+            cycles.push("60");
+            cycles.push("90");
+            cycles.push("120");
+            cycles.push("日");
+            cycles.push("周");
+            cycles.push("月");
+            cycles.push("季");
+            cycles.push("半");
+            cycles.push("年");
+            let cyclesInts = new Array();
+            cyclesInts.push(1);
+            cyclesInts.push(5);
+            cyclesInts.push(10);
+            cyclesInts.push(15);
+            cyclesInts.push(20);
+            cyclesInts.push(30);
+            cyclesInts.push(60);
+            cyclesInts.push(90);
+            cyclesInts.push(120);
+            cyclesInts.push(1440);
+            cyclesInts.push(10080);
+            cyclesInts.push(43200);
+            cyclesInts.push(129600);
+            cyclesInts.push(259200);
+            cyclesInts.push(518400);
+            for(let c = 0; c < cycles.length; c++){
+                let cycleButton = new FCButton();
+                cycleButton.text = cycles[c];
+                cycleButton.size = new FCSize(27, 30);
+                cycleButton.textColor = "rgb(200,200,200)";
+                cycleButton.borderColor = "rgb(50,50,50)";
+                cycleButton.backColor = "none";
+                cycleButton.viewName = "cycle," + i.toString() + "," + cyclesInts[c].toString();
+                addViewToParent(cycleButton, topDiv);
+            }
+        }
+        queryHistoryData(currentCode, stockName, 0, findMyCharts);
+        queryHistoryData(currentCode, stockName, 1, findMyCharts);
+        queryHistoryData(currentCode, stockName, 1440, findMyCharts);
+        queryNewData();
+        updateViewDefault(gPaint.views);
+        invalidate(gPaint);
+        setInterval(queryNewData, 3000);
+        setInterval(queryPrice, 6000);
+
+        /**
+         * 绘制横轴刻度的自定义方法
+         * chart:图表
+         * paint:绘图对象
+         * clipRect:裁剪区域
+         */
+         gPaint.onPaintChartHScale = function(chart, paint, clipRect){
+            if (chart.datas && chart.datas.length > 0 && chart.hScaleHeight > 0) {
+                if(chart.cycle == "trend"){
+                    let times = new Array();
+                    if (chart.size.cx < 600)
+                    {
+                        times.push(10 * 60 + 30);
+                        times.push(11 * 60 + 30);
+                        times.push(14 * 60);
+                    }
+                    else
+                    {
+                        times.push(10 * 60);
+                        times.push(10 * 60 + 30);
+                        times.push(11 * 60);
+                        times.push(11 * 60 + 30);
+                        times.push(13 * 60 + 30);
+                        times.push(14 * 60);
+                        times.push(14 * 60 + 30);
+                    }
+                    for(let i = chart.firstVisibleIndex; i <= chart.lastVisibleIndex; i++){
+                        let dateNum = chart.datas[i].date;
+                        let date = new Date();
+                        date.setTime(dateNum); 
+                        let hour = date.getHours();
+                        let minute = date.getMinutes();
+                        for(let j = 0; j < times.length; j++){
+                            if(times[j] == hour * 60 + minute){
+                                let x = getChartX(chart, i);
+                                let bBottom = chart.size.cy;
+                                paint.drawLine(chart.scaleColor, 1, 0, x, bBottom - chart.hScaleHeight, x, bBottom - chart.hScaleHeight + 12);
+                                paint.drawLine(chart.gridColor, 1, 0, x, 0, x, bBottom - chart.hScaleHeight);
+                                let xText = dateFormat("HH:MM", date);
+                                let tSize = paint.textSize(xText, "Default,12");
+                                paint.drawText(xText, chart.hScaleTextColor, "Default,12", x - tSize.cx / 2, bBottom - chart.hScaleHeight / 2 - tSize.cy / 2);
+                                break;
+                            }
+                        }
+                    }
+                }else if(chart.cycle == "minute"){
+                    let lastYear = 0;
+                    let lastDate2 = 0;
+                    let dLeft = chart.leftVScaleWidth;
+                    for(let i = chart.firstVisibleIndex; i <= chart.lastVisibleIndex; i++){
+                        let dateNum = chart.datas[i].date;
+                        let date = new Date();
+                        date.setTime(dateNum); 
+                        let year = date.getFullYear();
+                        let xText = "";
+                        if (year != lastYear)
+                        {
+                            xText = dateFormat("YYYY/mm/dd", date);
+                        }
+                        else
+                        {
+                            xText = dateFormat("mm/dd", date);
+                        }
+                        if (parseInt(lastDate2 / 86400000) != parseInt(dateNum / 86400000))
+                        {
+                            lastDate2 = dateNum;
+                            lastYear = year;
+                            let tSize = paint.textSize(xText, "Default,12");
+                            let x = getChartX(chart, i);
+                            let dx = x + 2;
+                            if (dx > dLeft && dx + tSize.cx < chart.size.cx - chart.rightVScaleWidth - 5)
+                            {
+                                let bBottom = chart.size.cy;
+                                paint.drawLine(chart.scaleColor, 1, 0, x, bBottom - chart.hScaleHeight, x, bBottom - chart.hScaleHeight + 12);
+                                paint.drawText(xText, chart.hScaleTextColor, "Default,12", dx, bBottom - chart.hScaleHeight / 2 - tSize.cy / 2);
+                                i = i + parseInt((tSize.cx + chart.hScaleTextDistance) / chart.hScalePixel) + 1;
+                            }
+                        }
+                    }
+                }
+                else if(chart.cycle == "day"){
+                    let drawLeft = chart.leftVScaleWidth; //左侧起画点
+                    let i = chart.firstVisibleIndex; //开始索引
+                    let lastYear = 0; //缓存年份，用于判断是否换年
+                    let drawYearsCache = []; //实际绘制到图形上的年份文字
+                    let lastTextRight = 0; //上个文字的右侧
+                    let timeCache = []; //保存日期的缓存
+                    let yearTextLeftCache = []; //绘制年文字的左侧位置缓存
+                    let yearTextRightCache = []; //绘制年文字的右侧位置缓存
+                    let textPadding = 5; //两个文字之间的最小间隔
+                    //逐步递增索引，先绘制年
+                    while(i <= chart.lastVisibleIndex){
+                        let dateObj = new Date();
+                        dateObj.setTime(chart.datas[i].date); //将时间戳转换为time，并缓存到集合中
+                        timeCache.push(dateObj);
+                        let year = dateObj.getFullYear(); //从结构中获取年份			
+                        let x = getChartX(chart, i); //获取索引对应的位置
+                        //判断是否换年，以及是否在绘图区间内
+                        if (year != lastYear && x >= drawLeft && x < chart.size.cx - chart.rightVScaleWidth){
+                            let month = dateObj.getMonth() + 1; //获取月的结构
+                            let xText = year.toString(); //拼接要绘制的文字
+                            if (month < 10){
+                                xText = xText + "/0" + month.toString(); //如果小于10月要补0
+                            }
+                            else{
+                                xText = xText + "/" + month.toString(); //大于等于10月不用补0
+                            }
+                            let tSize = paint.textSize(xText, chart.font); //计算要绘制文字的大小
+                            paint.drawLine(chart.scaleColor, 1, 0, x, chart.size.cy - chart.hScaleHeight, x, chart.size.cy - chart.hScaleHeight + 8) //绘制刻度线
+                            //判断是否和上个文字重影
+                            if (x + 2 > lastTextRight + textPadding){
+                                paint.drawText(xText, chart.hScaleTextColor, "Default,12", x + 2, chart.size.cy - chart.hScaleHeight + 8  - tSize.cy / 2 + 7) //绘制文字
+                                yearTextLeftCache.push(x + 2); //将年文字的左侧位置缓存
+                                yearTextRightCache.push(x + 2 + tSize.cx); //将年文字的右侧位置缓存
+                                drawYearsCache.push(year); //缓存要绘制的年
+                                lastTextRight = x + 2 + tSize.cx; //缓存上个文字的右侧位置
+                            }
+                            lastYear = year; //记录上次绘制的年份
+                        }
+                        i = i + 1;	//索引累加
+                    }	
+                    //绘制月份
+                    for(let m = 0; m < drawYearsCache.length; m++){
+                        let cacheYear = drawYearsCache[m]; //从缓存中获取年份
+                        let lastMonth = 0; //缓存月份，用于判断是否换月
+                        i = chart.firstVisibleIndex; //重置开始索引
+                        lastTextRight = 0; //重置上个文字的右侧
+                        //逐步递增索引
+                        while (i <= chart.lastVisibleIndex){
+                            let dateObj = timeCache[i - chart.firstVisibleIndex]; //从缓存中获取time
+                            let year = dateObj.getFullYear(); //从结构中获取年份
+                            //判断是否同一年	
+                            if (cacheYear == year){
+                                let month = dateObj.getMonth() + 1; //从结构中获取月份
+                                let x = getChartX(chart, i);
+                                //判断是否换月，以及是否在绘图区间内
+                                if(lastMonth != month && x >= drawLeft && x < chart.size.cx - chart.rightVScaleWidth){		
+                                    let xText = month.toString(); //获取绘制的月份文字
+                                    let tSize = paint.textSize(xText, chart.font); //计算要绘制文字的大小
+                                    //判断是否和上个文字重影
+                                    if(x + 2 > lastTextRight + textPadding){
+                                        if ((x + 2 > yearTextRightCache[m] + textPadding) 
+                                        && ((m == drawYearsCache.length - 1) 
+                                        || ((m < drawYearsCache.length - 1) 
+                                        && (x + 2 + tSize.cx < yearTextLeftCache[m + 1] - textPadding)))){
+                                            paint.drawLine(chart.scaleColor, 1, 0, x, chart.size.cy - chart.hScaleHeight, x, chart.size.cy - chart.hScaleHeight + 6); //绘制刻度
+                                            paint.drawText(xText, chart.hScaleTextColor, "Default,12", x + 2, chart.size.cy - chart.hScaleHeight + 8  - tSize.cy / 2 + 7); //绘制文字
+                                            lastTextRight = x + 2 + tSize.cx; //缓存上个文字的右侧位置
+                                        }
+                                    }
+                                    lastMonth = month //记录上次绘制的月份
+                                }
+                            }
+                            else if(cacheYear < year){
+                                break; //超过区间，退出循环
+                            }
+                            i = i + 1;	//索引累加
+                        }
+                    }
+                }
+            }
+        };
+    </script>
+</body>
+</html>

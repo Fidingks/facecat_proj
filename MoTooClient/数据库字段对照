@@ -1,0 +1,15 @@
+id
+strategy_id
+symbol
+wallet
+strategy_type
+strategy
+strategy_abstract
+notify_level
+notify_interval_time
+last_notify_time
+total_notify_times
+notified_times
+add_time
+edit_time
+active
