@@ -1,0 +1,2175 @@
+<html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title>花卷猫</title>
+        <style>
+            html,body {
+                width: 100%;
+                height: 100%
+            }
+
+            * {
+                margin: 0;
+                padding: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <video id="myvideo" src="" controls="controls" width="500" height="300" style="position:fixed;left:0px;top:0px;z-index:999;display:none;" onmousedown="javascript:this.style.display='none';" ontouchstart="javascript:this.style.display='none';" loop="loop" muted></video>
+        <canvas id="exampleCanvas" width="400" height="700"/>
+        <script type="text/javascript">
+            class FP {
+                constructor(t, l) {
+                    this.x = t,
+                    this.y = l
+                }
+            }
+            class FS {
+                constructor(t, l) {
+                    this.cx = t,
+                    this.cy = l
+                }
+            }
+            class FR {
+                constructor(t, l, e, i) {
+                    this.l = t,
+                    this.t = l,
+                    this.r = e,
+                    this.b = i
+                }
+            }
+            function ccr(t) {
+                if (-1 != t.indexOf("rgba(")) {
+                    let l = t.replace("rgba(", "").replace(")", "").split(",");
+                    if (l.length >= 4) {
+                        let t = parseFloat(l[3]);
+                        return t /= 255,
+                        "rgba(" + l[0] + "," + l[1] + "," + l[2] + "," + t + ")"
+                    }
+                }
+                return t
+            }
+            class FCPaint {
+                constructor() {
+                    this.cancelClick = !1,
+                    this.canvas = null,
+                    this.context = null,
+                    this.ds = "light",
+                    this.firstTouch = !1,
+                    this.focusedView = null,
+                    this.isPath = !1,
+                    this.isMobile = !1,
+                    this.moveTo = !1,
+                    this.ratio = 1,
+                    this.sfX = 1,
+                    this.sfY = 1,
+                    this.secondTouch = !1,
+                    this.systemFont = "Arial",
+                    this.touchDownView = null,
+                    this.touchMoveView = null,
+                    this.touchDownPoint = null,
+                    this.tpf = new FP(0,0),
+                    this.tsp = new FP(0,0),
+                    this.views = new Array,
+                    this.onClickGridCell = null,
+                    this.onClickGridColumn = null,
+                    this.onPaint = null,
+                    this.onPaintBorder = null,
+                    this.onPaintGridCell = null,
+                    this.onPaintGridColumn = null
+                }
+                al(t, l, e, i) {
+                    this.moveTo || (this.moveTo = !0,
+                    this.context.moveTo(Math.round(t * this.sfX), Math.round(l * this.sfY))),
+                    this.context.lineTo(Math.round(e * this.sfX), Math.round(i * this.sfY))
+                }
+                beginPath() {
+                    this.context.beginPath(),
+                    this.isPath = !0
+                }
+                beginPaint(t) {
+                    this.context || (this.context = this.canvas.getContext("2d")),
+                    this.moveTo = !1
+                }
+                closeFigure() {
+                    this.context.closePath()
+                }
+                closePath() {
+                    this.moveTo = !1
+                }
+                dl(t, l, e, i, r, s, o) {
+                    l = Math.min(this.sfX, this.sfY) * l,
+                    this.context.beginPath(),
+                    this.context.strokeStyle = ccr(t),
+                    this.context.lineWidth = l,
+                    this.context.lineWidth < 1 && (this.context.lineWidth = 1),
+                    0 != e && this.context.setLineDash(e),
+                    this.context.moveTo(Math.round(i * this.sfX), Math.round(r * this.sfY)),
+                    this.context.lineTo(Math.round(s * this.sfX), Math.round(o * this.sfY)),
+                    this.context.stroke(),
+                    0 != e && this.context.setLineDash([])
+                }
+                dp(t, l, e) {
+                    l = Math.min(this.sfX, this.sfY) * l,
+                    0 != e && this.context.setLineDash(e),
+                    this.context.strokeStyle = ccr(t),
+                    this.context.lineWidth = l,
+                    this.context.lineWidth < 1 && (this.context.lineWidth = 1),
+                    this.context.stroke(),
+                    0 != e && this.context.setLineDash([])
+                }
+                drawImage(t, l, e, i, r) {
+                    let s = i - l
+                      , o = r - e;
+                    try {
+                        this.context.drawImage(t, Math.round(l * this.sfX), Math.round(e * this.sfY), Math.round(s * this.sfX), Math.round(o * this.sfY))
+                    } catch (t) {}
+                }
+                dpl(t, l, e, i) {
+                    if (i.length > 1) {
+                        l = Math.min(this.sfX, this.sfY) * l,
+                        e && this.context.setLineDash(e),
+                        this.context.strokeStyle = ccr(t),
+                        this.context.lineWidth = l,
+                        this.context.lineWidth < 1 && (this.context.lineWidth = 1),
+                        this.context.beginPath();
+                        for (let t = 0; t < i.length; t++) {
+                            let l = i[t].x
+                              , e = i[t].y;
+                            1 == this.sfX && 1 == this.sfY || (l = this.sfX * l,
+                            e = this.sfY * e),
+                            0 == t ? this.context.moveTo(Math.round(l), Math.round(e)) : this.context.lineTo(Math.round(l), Math.round(e))
+                        }
+                        this.context.stroke(),
+                        e && this.context.setLineDash([])
+                    }
+                }
+                dpg(t, l, e, i) {
+                    if (i.length > 1) {
+                        l = Math.min(this.sfX, this.sfY) * l,
+                        e && this.context.setLineDash(e),
+                        this.context.strokeStyle = ccr(t),
+                        this.context.lineWidth = l,
+                        this.context.lineWidth < 1 && (this.context.lineWidth = 1),
+                        this.context.beginPath();
+                        for (let t = 0; t < i.length; t++) {
+                            let l = i[t].x
+                              , e = i[t].y;
+                            1 == this.sfX && 1 == this.sfY || (l = this.sfX * l,
+                            e = this.sfY * e),
+                            0 == t ? this.context.moveTo(Math.round(l), Math.round(e)) : this.context.lineTo(Math.round(l), Math.round(e))
+                        }
+                        this.context.closePath(),
+                        this.context.stroke(),
+                        e && this.context.setLineDash([])
+                    }
+                }
+                de(t, l, e, i, r, s, o) {
+                    l = Math.min(this.sfX, this.sfY) * l;
+                    let a = s - i
+                      , n = o - r;
+                    0 != e && this.context.setLineDash(e),
+                    this.context.strokeStyle = ccr(t),
+                    this.context.lineWidth = l,
+                    this.context.lineWidth < 1 && (this.context.lineWidth = 1);
+                    let c = (i + (s - i) / 2) * this.sfX
+                      , h = (r + (o - r) / 2) * this.sfY;
+                    if (this.context.ellipse)
+                        this.context.beginPath(),
+                        this.context.ellipse(c, h, a / 2 * this.sfX, n / 2 * this.sfY, 0, 0, 2 * Math.PI),
+                        this.context.stroke();
+                    else {
+                        let t = Math.max(a, n) / 2;
+                        t < 1 && (t = 1),
+                        this.context.save(),
+                        this.context.translate(c, h),
+                        t > 1 && (a > n ? this.context.scale(1, n / a) : a < n && this.context.scale(a / n, 1)),
+                        this.context.beginPath(),
+                        this.context.arc(0, 0, t, 0, 2 * Math.PI, !1),
+                        this.context.stroke(),
+                        this.context.restore()
+                    }
+                    0 != e && this.context.setLineDash([])
+                }
+                dr(t, l, e, i, r, s, o) {
+                    l = Math.min(this.sfX, this.sfY) * l;
+                    let a = s - i
+                      , n = o - r;
+                    0 != e && this.context.setLineDash(e),
+                    this.context.strokeStyle = ccr(t),
+                    this.context.lineWidth = l,
+                    this.context.lineWidth < 1 && (this.context.lineWidth = 1),
+                    this.context.strokeRect(Math.round(i * this.sfX), Math.round(r * this.sfY), Math.round(a * this.sfX), Math.round(n * this.sfY)),
+                    0 != e && this.context.setLineDash([])
+                }
+                drr(t, l, e, i, r, s, o, a) {
+                    if (a > 0) {
+                        l = Math.min(this.sfX, this.sfY) * l,
+                        0 != e && this.context.setLineDash(e),
+                        this.context.strokeStyle = ccr(t),
+                        this.context.lineWidth = l,
+                        this.context.lineWidth < 1 && (this.context.lineWidth = 1);
+                        let n = a * Math.min(this.sfX, this.sfY)
+                          , c = Math.round((s - i) * this.sfX)
+                          , h = Math.round((o - r) * this.sfY)
+                          , d = i * this.sfX
+                          , g = r * this.sfY;
+                        this.context.beginPath(),
+                        this.context.moveTo(d + n, g),
+                        this.context.arcTo(d + c, g, d + c, g + h, n),
+                        this.context.arcTo(d + c, g + h, d, g + h, n),
+                        this.context.arcTo(d, g + h, d, g, n),
+                        this.context.arcTo(d, g, d + n, g, n),
+                        this.context.stroke(),
+                        0 != e && this.context.setLineDash([])
+                    } else
+                        this.dr(t, l, e, i, r, s, o)
+                }
+                dt(t, l, e, i, r) {
+                    if (t && 0 != t.length && e) {
+                        let s = e.split(",")
+                          , o = s[0];
+                        "Default" == o && (o = this.systemFont);
+                        let a = parseInt(s[1]) + "px " + o;
+                        1 == this.sfX && 1 == this.sfY || (a = parseInt(Math.min(this.sfX, this.sfY) * parseFloat(s[1])) + "px " + o);
+                        for (let t = 2; t < s.length; t++) {
+                            let l = s[t].toLowerCase();
+                            "bold" != l && "italic" != l || (a = l + " " + a)
+                        }
+                        this.context.font = a,
+                        this.context.fillStyle = ccr(l),
+                        this.context.textAlign = "left",
+                        this.context.textBaseline = "top",
+                        this.context.fillText(t, Math.round(i * this.sfX), Math.round(r * this.sfY))
+                    }
+                }
+                endPaint() {
+                    this.container && this.context.draw()
+                }
+                fillPath(t) {
+                    let l = ccr(t);
+                    this.context.fillStyle != l && (this.context.fillStyle = l),
+                    this.context.fill()
+                }
+                fr(t, l, e, i, r) {
+                    let s = i - l
+                      , o = r - e;
+                    this.context.fillStyle = ccr(t),
+                    this.context.fillRect(Math.round(l * this.sfX), Math.round(e * this.sfY), Math.round(s * this.sfX), Math.round(o * this.sfY))
+                }
+                frr(t, l, e, i, r, s) {
+                    if (s > 0) {
+                        let o = Math.round((i - l) * this.sfX)
+                          , a = Math.round((r - e) * this.sfY)
+                          , n = l * this.sfX
+                          , c = e * this.sfY
+                          , h = s * Math.min(this.sfX, this.sfY);
+                        this.context.beginPath(),
+                        this.context.moveTo(n + h, c),
+                        this.context.arcTo(n + o, c, n + o, c + a, h),
+                        this.context.arcTo(n + o, c + a, n, c + a, h),
+                        this.context.arcTo(n, c + a, n, c, h),
+                        this.context.arcTo(n, c, n + h, c, h),
+                        this.context.fillStyle = ccr(t),
+                        this.context.fill()
+                    } else
+                        this.fr(t, l, e, i, r)
+                }
+                fe(t, l, e, i, r) {
+                    let s = i - l
+                      , o = r - e;
+                    this.context.fillStyle = ccr(t);
+                    let a = (l + (i - l) / 2) * this.sfX
+                      , n = (e + (r - e) / 2) * this.sfY;
+                    if (this.context.ellipse)
+                        this.context.beginPath(),
+                        this.context.ellipse(a, n, s / 2 * this.sfX, o / 2 * this.sfY, 0, 0, 2 * Math.PI),
+                        this.context.fill();
+                    else {
+                        let t = Math.max(s, o) / 2;
+                        t < 1 && (t = 1),
+                        this.context.save(),
+                        this.context.translate(a, n),
+                        t > 1 && (s > o ? this.context.scale(1, o / s) : s < o && this.context.scale(s / o, 1)),
+                        this.context.beginPath(),
+                        this.context.arc(0, 0, t, 0, 2 * Math.PI, !1),
+                        this.context.fill(),
+                        this.context.restore()
+                    }
+                }
+                fpg(t, l) {
+                    if (l.length > 1) {
+                        this.context.beginPath();
+                        for (let t = 0; t < l.length; t++) {
+                            let e = l[t].x
+                              , i = l[t].y;
+                            1 == this.sfX && 1 == this.sfY || (e = this.sfX * e,
+                            i = this.sfY * i),
+                            0 == t ? this.context.moveTo(Math.round(e), Math.round(i)) : this.context.lineTo(Math.round(e), Math.round(i))
+                        }
+                        this.context.fillStyle = ccr(t),
+                        this.context.closePath(),
+                        this.context.fill()
+                    }
+                }
+                ts(t, l) {
+                    if (t && 0 != t.length && l) {
+                        let e = l.split(",")
+                          , i = e[0];
+                        "Default" == i && (i = this.systemFont);
+                        let r = parseInt(e[1]) + "px " + i;
+                        for (let t = 2; t < e.length; t++) {
+                            let l = e[t].toLowerCase();
+                            "bold" != l && "italic" != l || (r = l + " " + r)
+                        }
+                        this.context.font = r,
+                        this.context.textAlign = "left",
+                        this.context.textBaseline = "top";
+                        let s = this.context.measureText(t);
+                        if (this.container)
+                            return new FS(s.width,parseInt(e[1]));
+                        {
+                            let t = s.actualBoundingBoxAscent + s.actualBoundingBoxDescent;
+                            if (!t || t <= 0)
+                                return new FS(s.width,parseInt(e[1]));
+                            return new FS(s.width,t)
+                        }
+                    }
+                    return new FS(0,0)
+                }
+                save() {
+                    this.context.save()
+                }
+                restore() {
+                    this.context.restore()
+                }
+                dtae(t, l, e, i, r, s, o) {
+                    if (t && 0 != t.length) {
+                        let o = this.ts(t, e);
+                        if (o.cx < s - i)
+                            this.dt(t, l, e, i, r);
+                        else if (o.cx > 0) {
+                            let a = 3;
+                            for (; ; ) {
+                                let n = t.length - a;
+                                if (!(n > 0))
+                                    break;
+                                {
+                                    let c = t.substring(0, n) + "...";
+                                    if ((o = this.ts(c, e)).cx < s - i) {
+                                        this.dt(c, l, e, i, r);
+                                        break
+                                    }
+                                    a += 3
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            class FCView {
+                constructor() {
+                    this.allowDragScroll = !1,
+                    this.backColor = null,
+                    this.borderColor = null,
+                    this.clipRect = null,
+                    this.cornerRadius = 0,
+                    this.dock = "none",
+                    this.downScrollHButton = !1,
+                    this.downScrollVButton = !1,
+                    this.exAttributes = new Map,
+                    this.enabled = !0,
+                    this.font = "Default,12",
+                    this.hoveredColor = null,
+                    this.input = null,
+                    this.location = new FP(0,0),
+                    this.maximumSize = new FS(0,0),
+                    this.paint = null,
+                    this.parent = null,
+                    this.pushedColor = "rgb(200,200,200)",
+                    this.scrollV = 0,
+                    this.scrollH = 0,
+                    this.scrollSize = 8,
+                    this.showHScrollBar = !1,
+                    this.showVScrollBar = !1,
+                    this.scrollBarColor = "rgb(200,200,200)",
+                    this.scrollBarHoveredColor = "rgb(200,200,200)",
+                    this.size = new FS(0,0),
+                    this.startScrollH = 0,
+                    this.startScrollV = 0,
+                    this.startPoint = new FP,
+                    this.startRect = new FR,
+                    this.text = null,
+                    this.textColor = null,
+                    this.touchDownTime = 0,
+                    this.views = new Array,
+                    this.viewName = null,
+                    this.visible = !0
+                }
+            }
+            class FCGridColumn {
+                constructor() {
+                    this.backColor = "rgb(200,200,200)",
+                    this.borderColor = "rgb(150,150,150)",
+                    this.bounds = new FR,
+                    this.font = "Default,12",
+                    this.frozen = !1,
+                    this.index = -1,
+                    this.sort = "none",
+                    this.text = "",
+                    this.textColor = "rgb(50,50,50)",
+                    this.visible = !0,
+                    this.width = 120,
+                    this.widthStr = ""
+                }
+            }
+            class FCGridCell {
+                constructor() {
+                    this.backColor = "rgb(255,255,255)",
+                    this.borderColor = "rgb(150,150,150)",
+                    this.column = null,
+                    this.font = "Default,12",
+                    this.textColor = "rgb(0,0,0)",
+                    this.value = null
+                }
+            }
+            class FCGridRow {
+                constructor() {
+                    this.cells = new Array,
+                    this.index = -1,
+                    this.selected = !1,
+                    this.visible = !0
+                }
+            }
+            class FCGrid extends FCView {
+                constructor() {
+                    super(),
+                    super.allowDragScroll = !0,
+                    this.columns = new Array,
+                    this.headerHeight = 30,
+                    this.rows = new Array,
+                    this.rowHeight = 30,
+                    super.showHScrollBar = !0,
+                    super.showVScrollBar = !0,
+                    this.selectedRowColor = "rgb(125,125,125)",
+                    super.viewType = "grid"
+                }
+            }
+            
+            let addView = function(t, l) {
+                t.paint = l,
+                l.views.push(t)
+            }
+              , gtp = function(t, l, e) {
+                let i = window.getComputedStyle(l, null)
+                  , r = parseFloat(i.width)
+                  , s = parseFloat(i.height)
+                  , o = parseFloat(i["border-left-width"])
+                  , a = parseFloat(i["border-top-width"])
+                  , n = parseFloat(i["padding-left"])
+                  , c = parseFloat(i["padding-top"])
+                  , h = l.width / r
+                  , d = l.height / s
+                  , g = t.clientX
+                  , u = t.clientY
+                  , p = l.getBoundingClientRect();
+                return g -= p.left + o + n,
+                u -= p.top + a + c,
+                g *= h,
+                u *= d,
+                g /= e.ratio,
+                u /= e.ratio,
+                {
+                    x: g /= e.sfX,
+                    y: u /= e.sfY
+                }
+            }
+              , renderViews = function(t, l, e) {
+                let i = t.length;
+                for (let e = 0; e < i; e++) {
+                    let i = t[e]
+                      , r = new FR(0,0,i.size.cx,i.size.cy);
+                    l.onPaint && l.onPaint(i, l, r),
+                    l.onPaintBorder && l.onPaintBorder(i, l, r)
+                }
+            }
+              , iv = function(t) {
+                let l = t.views;
+                t.beginPaint(null);
+                let e = new FR(0,0,t.canvas.width / t.ratio / t.sfX,t.canvas.height / t.ratio / t.sfY);
+                renderViews(l, t, e),
+                t.endPaint()
+            }
+              , ivv = function(t) {
+                iv(t.paint)
+            }
+              , uvd = function(t) {
+                for (let l = 0; l < t.length; l++) {
+                    let e = t[l];
+                    if ("fill" == e.dock) {
+                        let t = e.paint;
+                        e.size = new FS(t.canvas.width / t.ratio / t.sfX,t.canvas.height / t.ratio / t.sfY),
+                        (!e.paint.isMobile || e.size.cx > 450) && (e.size = new FS(460,e.size.cy))
+                    }
+                    e.views && uvd(e.views)
+                }
+            }
+              , amde = function(t, l, e) {
+                t.onmousedown = function(i) {
+                    if (!l.isMobile) {
+                        let r = gtp(i, t, l);
+                        if (l.cancelClick = !1,
+                        l.touchDownPoint = r,
+                        l.touchDownView = gList,
+                        l.touchDownView) {
+                            l.focusedView = l.touchDownView;
+                            let t = new FP(r.x,r.y);
+                            e && (2 == i.button ? e(l.touchDownView, t, 2, 1, 0) : e(l.touchDownView, t, 1, 1, 0))
+                        }
+                    }
+                }
+            }
+              , amme = function(t, l, e) {
+                t.onmousemove = function(i) {
+                    if (0 == i.buttons && (l.touchDownView = null),
+                    !l.isMobile) {
+                        let r = gtp(i, t, l);
+                        if (l.touchDownView) {
+                            l.touchMoveView = l.touchDownView;
+                            let t = new FP(r.x,r.y);
+                            e && e(l.touchDownView, t, 1, 1, 0)
+                        } else {
+                            let t = gList
+                              , i = new FP(r.x,r.y);
+                            t && (oldMouseMoveView = l.touchMoveView,
+                            l.touchMoveView = t,
+                            oldMouseMoveView && oldMouseMoveView != t && ivv(oldMouseMoveView),
+                            e && e(t, i, 0, 0, 0))
+                        }
+                    }
+                }
+            }
+              , amwe = function(t, l, e) {
+                t.addEventListener("DOMMouseScroll", function(i) {
+                    if (!l.isMobile) {
+                        let r = gtp(i, t, l)
+                          , s = gList;
+                        if (s) {
+                            let t = new FP(r.x,r.y)
+                              , l = i.detail;
+                            e && e(s, t, 0, 0, l)
+                        }
+                        s && s.allowDragScroll && (i.preventDefault && i.preventDefault(),
+                        i.returnValue = !1,
+                        i.stopPropagation && i.stopPropagation())
+                    }
+                    return !1
+                }, !1),
+                t.onmousewheel = function(i) {
+                    if (!l.isMobile) {
+                        let r = gtp(i, t, l)
+                          , s = gList;
+                        if (s) {
+                            let t = new FP(r.x,r.y)
+                              , l = i.deltaY;
+                            e && e(s, t, 0, 0, l)
+                        }
+                        s && s.allowDragScroll && (i.preventDefault && i.preventDefault(),
+                        i.returnValue = !1,
+                        i.stopPropagation && i.stopPropagation())
+                    }
+                    return !1
+                }
+            }
+              , amue = function(t, l, e, i) {
+                t.onmouseup = function(r) {
+                    if (!l.isMobile) {
+                        let s = gtp(r, t, l);
+                        if (l.touchDownView) {
+                            let t = new FP(s.x,s.y);
+                            if (null != gList && gList == l.touchDownView && (l.cancelClick || i && i(l.touchDownView, !0, t, !1, t, 1)),
+                            l.touchDownView) {
+                                let i = l.touchDownView;
+                                l.touchDownView = null,
+                                e && e(i, t, 1, 1, 0)
+                            }
+                        }
+                    }
+                }
+            }
+              , atbe = function(t, l, e) {
+                t.ontouchstart = function(i) {
+                    if (l.isMobile) {
+                        l.cancelClick = !1;
+                        let r = gtp(i.touches[0], t, l);
+                        l.touchDownPoint = new FP(r.x,r.y),
+                        l.touchDownView = gList,
+                        l.touchDownView && (l.focusedView = l.touchDownView,
+                        l.firstTouch = !1,
+                        l.secondTouch = !1,
+                        l.tpf = new FP,
+                        l.tsp = new FP,
+                        i.touches.length >= 1 && (l.firstTouch = !0,
+                        l.tpf = gtp(i.touches[0], t, l)),
+                        i.touches.length >= 2 && (l.secondTouch = !0,
+                        l.tsp = gtp(i.touches[1], t, l)),
+                        e && e(l.touchDownView, l.firstTouch, l.tpf, l.secondTouch, l.tsp))
+                    }
+                }
+            }
+              , atme = function(t, l, e) {
+                t.ontouchmove = function(i) {
+                    if (l.isMobile && l.touchDownView) {
+                        l.firstTouch = !1,
+                        l.secondTouch = !1,
+                        l.tpf = new FP,
+                        l.tsp = new FP;
+                        let r = gtp(i.touches[0], t, l);
+                        i.touches.length >= 1 && (l.firstTouch = !0,
+                        l.tpf = gtp(i.touches[0], t, l)),
+                        i.touches.length >= 2 && (l.secondTouch = !0,
+                        l.tsp = gtp(i.touches[1], t, l)),
+                        e && e(l.touchDownView, l.firstTouch, l.tpf, l.secondTouch, l.tsp),
+                        l.touchDownPoint = r,
+                        l.touchDownView && l.touchDownView.allowDragScroll && (i.preventDefault && i.preventDefault(),
+                        i.returnValue = !1,
+                        i.stopPropagation && i.stopPropagation())
+                    }
+                    return !1
+                }
+            }
+              , atee = function(t, l, e, i) {
+                t.ontouchend = function(t) {
+                    if (l.isMobile && l.touchDownView) {
+                        let t = l.touchDownView
+                          , r = l.touchDownPoint;
+                        if (null != gList && gList == l.touchDownView) {
+                            let t = new FP(r.x,r.y);
+                            i && i(l.touchDownView, !0, t, !1, t, 1)
+                        }
+                        l.touchDownView = null,
+                        e && e(t, l.firstTouch, l.tpf, l.secondTouch, l.tsp)
+                    }
+                }
+            }
+              , drawGrid = function(t, l, e) {
+                let i = -t.scrollV + t.headerHeight
+                  , r = 0;
+                for (let l = 0; l < t.columns.length; l++) {
+                    if (t.columns[l].widthStr.length > 0) {
+                        let e = t.columns[l].widthStr.replace("%", "");
+                        t.columns[l].width = Number(e) * t.size.cx / 100
+                    }
+                    let e = new FR(r,0,r + t.columns[l].width,t.headerHeight);
+                    t.columns[l].bounds = e,
+                    t.columns[l].index = l,
+                    r += t.columns[l].width
+                }
+                for (let e = 0; e < t.rows.length; e++) {
+                    let r = t.rows[e];
+                    if (r.index = e,
+                    r.visible) {
+                        let s = t.rowHeight;
+                        e < 2 && (s = 50);
+                        let o = i;
+                        if (i + s >= 0 && i <= t.size.cy)
+                            for (let e = 0; e < r.cells.length; e++) {
+                                let i = r.cells[e]
+                                  , a = i.column;
+                                if (a || (a = t.columns[e]),
+                                a.visible && !a.frozen) {
+                                    let e = a.width
+                                      , n = s
+                                      , c = new FR(a.bounds.l - t.scrollH,o,a.bounds.l + e - t.scrollH,o + n);
+                                    c.r >= 0 && c.l < t.size.cx && l.onPaintGridCell && l.onPaintGridCell(t, r, a, i, l, c.l, c.t, c.r, c.b)
+                                }
+                            }
+                        if (i > t.size.cy)
+                            break;
+                        i += s
+                    }
+                }
+            }
+              , drawGridScrollBar = function(t, l, e) {
+                if (t.headerHeight > 0) {
+                    let e = -t.scrollH;
+                    for (let i = 0; i < t.columns.length; i++) {
+                        let r = t.columns[i];
+                        t.columns[i].visible && (r.frozen || l.onPaintGridColumn && l.onPaintGridColumn(t, t.columns[i], l, e, 0, e + r.width, t.headerHeight),
+                        e += r.width)
+                    }
+                }
+                if (l.isMobile)
+                    if (l.touchDownView == t)
+                        ;
+                    else if (g_dragScrollView_Grid != t || 0 == g_scrollAddSpeed_Grid)
+                        return;
+                if (t.showHScrollBar) {
+                    let e = getGridContentWidth(t);
+                    if (e > 0 && e > t.size.cx) {
+                        let i = t.scrollH / e * t.size.cx
+                          , r = (t.scrollH + t.size.cx) / e * t.size.cx;
+                        r - i < t.scrollSize && (r = i + t.scrollSize),
+                        l.touchMoveView == t && (t.hoverScrollHButton || t.downScrollHButton) ? l.fr(t.scrollBarHoveredColor, i, t.size.cy - t.scrollSize, r, t.size.cy) : l.fr(t.scrollBarColor, i, t.size.cy - t.scrollSize, r, t.size.cy)
+                    }
+                }
+                if (t.showVScrollBar) {
+                    let e = getGridContentHeight(t);
+                    if (e > 0 && e > t.size.cy - t.headerHeight) {
+                        let i = t.headerHeight + t.scrollV / e * (t.size.cy - t.headerHeight - t.scrollSize)
+                          , r = i + (t.size.cy - t.headerHeight - t.scrollSize) / e * (t.size.cy - t.headerHeight - t.scrollSize);
+                        r - i < t.scrollSize && (r = i + t.scrollSize),
+                        l.touchMoveView == t && (t.hoverScrollVButton || t.downScrollVButton) ? l.fr(t.scrollBarHoveredColor, t.size.cx - t.scrollSize, i, t.size.cx, r) : l.fr(t.scrollBarColor, t.size.cx - t.scrollSize, i, t.size.cx, r)
+                    }
+                }
+            }
+              , getGridContentWidth = function(t) {
+                return t.size.cx
+            }
+              , getGridContentHeight = function(t) {
+                let l = 0;
+                for (let e = 0; e < t.rows.length; e++)
+                    t.rows[e].visible && (l += t.rowHeight);
+                return l
+            }
+              , touchMoveGrid = function(t, l, e, i, r) {
+                t.hoverScrollHButton = !1,
+                t.hoverScrollVButton = !1;
+                let s = e;
+                if (l) {
+                    if (t.showHScrollBar || t.showVScrollBar) {
+                        if (t.downScrollHButton) {
+                            let l = getGridContentWidth(t)
+                              , e = (s.x - t.startPoint.x) / t.size.cx * l
+                              , i = t.startScrollH + e;
+                            return i < 0 ? i = 0 : i > l - t.size.cx && (i = l - t.size.cx),
+                            t.scrollH = i,
+                            void (t.paint.cancelClick = !0)
+                        }
+                        if (t.downScrollVButton) {
+                            let l = getGridContentHeight(t)
+                              , e = (s.y - t.startPoint.y) / (t.size.cy - t.headerHeight - t.scrollSize) * l
+                              , i = t.startScrollV + e;
+                            return i < 0 ? i = 0 : i > l - (t.size.cy - t.headerHeight - t.scrollSize) && (i = l - (t.size.cy - t.headerHeight - t.scrollSize)),
+                            t.scrollV = i,
+                            void (t.paint.cancelClick = !0)
+                        }
+                    }
+                    if (t.allowDragScroll) {
+                        let l = getGridContentWidth(t);
+                        if (l > t.size.cx - t.scrollSize) {
+                            let e = t.startPoint.x - s.x
+                              , i = t.startScrollH + e;
+                            i < 0 ? i = 0 : i > l - t.size.cx && (i = l - t.size.cx),
+                            t.scrollH = i,
+                            Math.abs(e) > 5 && (t.paint.cancelClick = !0)
+                        }
+                        let e = getGridContentHeight(t);
+                        if (e > t.size.cy - t.headerHeight - t.scrollSize) {
+                            let l = t.startPoint.y - s.y
+                              , i = t.startScrollV + l;
+                            i < 0 ? i = 0 : i > e - (t.size.cy - t.headerHeight - t.scrollSize) && (i = e - (t.size.cy - t.headerHeight - t.scrollSize)),
+                            t.scrollV = i,
+                            Math.abs(l) > 5 && (t.paint.cancelClick = !0)
+                        }
+                    }
+                } else {
+                    if (t.showHScrollBar) {
+                        let l = getGridContentWidth(t);
+                        if (l > 0 && l > t.size.cx - t.scrollSize) {
+                            let e = t.scrollH / l * t.size.cx
+                              , i = (t.scrollH + t.size.cx) / l * t.size.cx;
+                            if (i - e < t.scrollSize && (i = e + t.scrollSize),
+                            s.x >= e && s.x <= i && s.y >= t.size.cy - t.scrollSize && s.y <= t.size.cy)
+                                return void (t.hoverScrollHButton = !0);
+                            t.hoverScrollHButton = !1
+                        }
+                    }
+                    if (t.showVScrollBar) {
+                        let l = getGridContentHeight(t);
+                        if (l > 0 && l > t.size.cy - t.headerHeight - t.scrollSize) {
+                            let e = t.headerHeight + t.scrollV / l * (t.size.cy - t.headerHeight - t.scrollSize)
+                              , i = t.headerHeight + (t.scrollV + (t.size.cy - t.headerHeight - t.scrollSize)) / l * (t.size.cy - t.headerHeight - t.scrollSize);
+                            if (i - e < t.scrollSize && (i = e + t.scrollSize),
+                            s.x >= t.size.cx - t.scrollSize && s.x <= t.size.cx && s.y >= e && s.y <= i)
+                                return void (t.hoverScrollVButton = !0);
+                            t.hoverScrollVButton = !1
+                        }
+                    }
+                }
+            }
+              , touchDownGrid = function(t, l, e, i, r, s) {
+                let o = e;
+                if (t.touchDownTime = (new Date).getTime(),
+                t.startPoint = o,
+                t.downScrollHButton = !1,
+                t.downScrollVButton = !1,
+                t.hoverScrollHButton = !1,
+                t.hoverScrollVButton = !1,
+                g_dragScrollView_Grid = null,
+                g_scrollAddSpeed_Grid = 0,
+                g_scrollDirection_Grid = 0,
+                t.showHScrollBar) {
+                    let l = getGridContentWidth(t);
+                    if (l > 0 && l > t.size.cx - t.scrollSize) {
+                        let e = t.scrollH / l * t.size.cx
+                          , i = (t.scrollH + t.size.cx) / l * t.size.cx;
+                        if (i - e < t.scrollSize && (i = e + t.scrollSize),
+                        o.x >= e && o.x <= i && o.y >= t.size.cy - t.scrollSize && o.y <= t.size.cy)
+                            return t.downScrollHButton = !0,
+                            void (t.startScrollH = t.scrollH)
+                    }
+                }
+                if (t.showVScrollBar) {
+                    let l = getGridContentHeight(t);
+                    if (l > 0 && l > t.size.cy - t.headerHeight - t.scrollSize) {
+                        let e = t.headerHeight + t.scrollV / l * (t.size.cy - t.headerHeight - t.scrollSize)
+                          , i = t.headerHeight + (t.scrollV + (t.size.cy - t.headerHeight - t.scrollSize)) / l * (t.size.cy - t.headerHeight - t.scrollSize);
+                        if (i - e < t.scrollSize && (i = e + t.scrollSize),
+                        o.x >= t.size.cx - t.scrollSize && o.x <= t.size.cx && o.y >= e && o.y <= i)
+                            return t.downScrollVButton = !0,
+                            void (t.startScrollV = t.scrollV)
+                    }
+                }
+                t.allowDragScroll && (t.startScrollH = t.scrollH,
+                t.startScrollV = t.scrollV);
+                let a = 0;
+                for (let l = 0; l < t.columns.length; l++) {
+                    let e = new FR(a,0,a + t.columns[l].width,t.headerHeight);
+                    t.columns[l].bounds = e,
+                    t.columns[l].index = l,
+                    a += t.columns[l].width
+                }
+            }
+              , g_dragScrollView_Grid = null
+              , g_scrollAddSpeed_Grid = 0
+              , g_scrollDirection_Grid = 0
+              , tick2 = 0
+              , checkGridDragScroll = function() {
+                if (g_dragScrollView_Grid) {
+                    let t = parseInt(g_scrollAddSpeed_Grid / 10);
+                    if (0 == t && g_scrollAddSpeed_Grid > 1 ? t = 1 : 0 == t && g_scrollAddSpeed_Grid < -1 && (t = -1),
+                    g_scrollAddSpeed_Grid -= t,
+                    0 == t) {
+                        let t = g_dragScrollView_Grid;
+                        if (g_dragScrollView_Grid = null,
+                        g_scrollAddSpeed_Grid = 0,
+                        t.paint)
+                            return ivv(t),
+                            void requestAnimationFrame(checkGridDragScroll)
+                    } else {
+                        let t = parseInt(g_dragScrollView_Grid.scrollV + g_scrollAddSpeed_Grid)
+                          , l = parseInt(g_dragScrollView_Grid.scrollH + g_scrollAddSpeed_Grid);
+                        if (0 == g_scrollDirection_Grid) {
+                            let l = getGridContentHeight(g_dragScrollView_Grid);
+                            l < g_dragScrollView_Grid.size.cy - g_dragScrollView_Grid.scrollSize ? g_dragScrollView_Grid.scrollV = 0 : (t < 0 ? t = 0 : t > l - g_dragScrollView_Grid.size.cy + g_dragScrollView_Grid.headerHeight + g_dragScrollView_Grid.scrollSize && (t = l - g_dragScrollView_Grid.size.cy + g_dragScrollView_Grid.headerHeight + g_dragScrollView_Grid.scrollSize),
+                            g_dragScrollView_Grid.scrollV = t)
+                        } else {
+                            let t = getGridContentWidth(g_dragScrollView_Grid);
+                            t < g_dragScrollView_Grid.size.cx - g_dragScrollView_Grid.headerHeight - g_dragScrollView_Grid.scrollSize ? g_dragScrollView_Grid.scrollH = 0 : (l < 0 ? l = 0 : l > t - g_dragScrollView_Grid.size.cx && (l = t - g_dragScrollView_Grid.size.cx),
+                            g_dragScrollView_Grid.scrollH = l)
+                        }
+                        if (g_dragScrollView_Grid.paint)
+                            return ivv(g_dragScrollView_Grid),
+                            void requestAnimationFrame(checkGridDragScroll)
+                    }
+                }
+                -1 !== navigator.userAgent.indexOf("Safari") && -1 === navigator.userAgent.indexOf("Chrome") ? checkPaint() : ++tick2 % 2 == 0 && checkPaint(),
+                requestAnimationFrame(checkGridDragScroll)
+            }
+              , touchUpGrid = function(t, l, e, i, r, s) {
+                if (t.hoverScrollHButton = !1,
+                t.hoverScrollVButton = !1,
+                l && e && t.startPoint && !t.downScrollHButton && !t.downScrollVButton && t.allowDragScroll) {
+                    let l = (new Date).getTime() - t.touchDownTime;
+                    if (l < 250) {
+                        let i = Math.abs(e.y - t.startPoint.y) / 20 * 100 / l * 10
+                          , r = Math.abs(e.x - t.startPoint.x) / 20 * 100 / l * 10;
+                        "A:" + i != "A:NaN" && "A:" + r != "A:NaN" && (Math.abs(i) > Math.abs(r) ? (e.y < t.startPoint.y ? g_scrollAddSpeed_Grid += i : g_scrollAddSpeed_Grid -= i,
+                        g_scrollDirection_Grid = 0) : (e.x < t.startPoint.x ? g_scrollAddSpeed_Grid += r : g_scrollAddSpeed_Grid -= r,
+                        g_scrollDirection_Grid = 1),
+                        Math.abs(g_scrollAddSpeed_Grid) > 0 && (t.paint.cancelClick = !0),
+                        g_dragScrollView_Grid = t)
+                    }
+                }
+                if (t.downScrollHButton = !1,
+                t.downScrollVButton = !1,
+                t.paint.cancelClick)
+                    return;
+                let o = -t.scrollV + t.headerHeight
+                  , a = 0;
+                for (let l = 0; l < t.columns.length; l++) {
+                    let e = new FR(a,0,a + t.columns[l].width,t.headerHeight);
+                    t.columns[l].bounds = e,
+                    t.columns[l].index = l,
+                    a += t.columns[l].width
+                }
+                if (t.headerHeight > 0 && e.y <= t.headerHeight) {
+                    let o = 0;
+                    o = -t.scrollH;
+                    for (let a = 0; a < t.columns.length; a++) {
+                        let n = t.columns[a];
+                        if (t.columns[a].visible) {
+                            if (!n.frozen && e.x >= o && e.x <= o + n.width)
+                                return void (t.paint && t.paint.onClickGridColumn && t.paint.onClickGridColumn(t, n, l, e, i, r, s));
+                            o += n.width
+                        }
+                    }
+                }
+                for (let a = 0; a < t.rows.length; a++) {
+                    let n = t.rows[a];
+                    if (n.visible) {
+                        let c = t.rowHeight;
+                        a < 2 && (c = 50);
+                        let h = o;
+                        if (o + c >= 0 && o <= t.size.cy)
+                            for (let o = 0; o < n.cells.length; o++) {
+                                let a = n.cells[o]
+                                  , d = a.column;
+                                if (d || (d = t.columns[o]),
+                                d.visible && !d.frozen) {
+                                    let o = d.width
+                                      , g = c
+                                      , u = new FR(d.bounds.l - t.scrollH,h,d.bounds.l + o - t.scrollH,h + g);
+                                    if (u.r >= 0 && u.l < t.size.cx && e.x >= u.l && e.x <= u.r && e.y >= u.t && e.y <= u.b)
+                                        return void (t.paint && t.paint.onClickGridCell && t.paint.onClickGridCell(t, n, d, a, l, e, i, r, s))
+                                }
+                            }
+                        if (o > t.size.cy)
+                            break;
+                        o += c
+                    }
+                }
+            }
+              , touchWheelGrid = function(t, l) {
+                let e = t.scrollV;
+                l < 0 ? e -= 20 : l > 0 && (e += 20);
+                let i = getGridContentHeight(t);
+                i < t.size.cy - t.headerHeight - t.scrollSize ? t.scrollV = 0 : (e < 0 ? e = 0 : e > i - t.size.cy + t.headerHeight + t.scrollSize && (e = i - t.size.cy + t.headerHeight + t.scrollSize),
+                t.scrollV = e)
+            }
+              , isMobileMode = function() {
+                let t = navigator.userAgent
+                  , l = !t.match(/(iPad).*OS\s([\d_]+)/) && t.match(/(iPhone\sOS)\s([\d_]+)/)
+                  , e = t.match(/(Android)\s+([\d.]+)/);
+                return l || e
+            }
+              , scaleCanvas = function(t) {
+                if (window.devicePixelRatio && !isMobileMode()) {
+                    let l = t.canvas;
+                    l.style.width = l.width + "px",
+                    l.style.height = l.height + "px",
+                    l.height = l.height * window.devicePixelRatio,
+                    l.width = l.width * window.devicePixelRatio,
+                    l.getContext("2d").scale(window.devicePixelRatio, window.devicePixelRatio),
+                    t.ratio = window.devicePixelRatio
+                }
+            }
+              , canvas = document.getElementById("exampleCanvas");
+            canvas.width = window.innerWidth,
+            canvas.height = window.innerHeight;
+            let gt = new FCPaint;
+            gt.canvas = canvas,
+            scaleCanvas(gt),
+            gt.ds = "dark",
+            gt.isMobile = isMobileMode(),
+            gt.isMobile ? (gt.sfX = 2.5,
+            gt.sfY = 2.5) : gt.ds = "light";
+            let gList = new FCGrid;
+            gList.dock = "fill",
+            addView(gList, gt),
+            gList.backColor = "rgb(0,0,0)",
+            gList.borderColor = null,
+            gList.textColor = "rgb(255,255,255)",
+            gList.scrollBarColor = "rgb(100,100,100)",
+            gList.visible = !0,
+            gList.rowHeight = 80,
+            gList.headerHeight = 50,
+            "dark" == gList.paint.ds ? (gList.backColor = "rgb(0,0,0)",
+            gList.borderColor = null,
+            gList.textColor = "rgb(255,255,255)",
+            gList.scrollBarColor = "rgb(100,100,100)") : "light" == gList.paint.ds && (gList.backColor = "rgb(250,250,250)",
+            gList.borderColor = null,
+            gList.textColor = "rgb(0,0,0)",
+            gList.scrollBarColor = "rgb(200,200,200)");
+            let gColumn = new FCGridColumn;
+            gColumn.text = "id",
+            gColumn.widthStr = "100%",
+            gList.columns.push(gColumn),
+            gColumn.backColor = "rgb(0,0,0)",
+            gColumn.borderColor = "rgb(100,100,100)",
+            gColumn.textColor = "rgb(255,255,255)";
+            let onMouseDown = function(t, l, e, i, r) {
+                touchDownGrid(t, !0, l, !1, l, i),
+                ivv(t)
+            }
+              , onMouseWheel = function(t, l, e, i, r) {
+                replayTick = 0,
+                tick = 0,
+                t.paint.isMobile && (clickIndex = -1),
+                touchWheelGrid(t, r),
+                ivv(t)
+            }
+              , onTouchBegin = function(t, l, e, i, r) {
+                touchDownGrid(t, l, e, i, r, 1),
+                ivv(t)
+            }
+              , onTouchMove = function(t, l, e, i, r) {
+                l && (replayTick = 0,
+                tick = 0,
+                t.paint.isMobile && (clickIndex = -1),
+                touchMoveGrid(t, l, e, i, r),
+                ivv(t))
+            }
+              , onTouchEnd = function(t, l, e, i, r) {
+                touchUpGrid(t, l, e, i, r, 1),
+                ivv(t)
+            }
+              , buttonRects = []
+              , mouseMovePoint = new FP
+              , onMouseMove = function(t, l, e, i, r) {
+                let s = !1;
+                mouseMovePoint = l,
+                1 == e && (s = !0,
+                replayTick = 0,
+                tick = 0,
+                t.paint.isMobile && (clickIndex = -1)),
+                touchMoveGrid(t, s, l, !1, l),
+                ivv(t);
+                let o = !1;
+                for (let t = 0; t < buttonRects.length; t++) {
+                    let e = buttonRects[t];
+                    if (l.x >= e.l && l.x <= e.r && l.y >= e.t && l.y <= e.b) {
+                        o = !0;
+                        break
+                    }
+                }
+                gt.canvas.style.cursor = o ? "pointer" : ""
+            }
+              , onMouseUp = function(t, l, e, i, r) {
+                touchUpGrid(t, !0, l, !1, l, i),
+                ivv(t)
+            };
+            amde(canvas, gt, onMouseDown),
+            amme(canvas, gt, onMouseMove),
+            amwe(canvas, gt, onMouseWheel),
+            amue(canvas, gt, onMouseUp, null),
+            atbe(canvas, gt, onTouchBegin),
+            atme(canvas, gt, onTouchMove),
+            atee(canvas, gt, onTouchEnd, null);
+            let resizeAll = function() {
+                canvas.width = document.documentElement.clientWidth,
+                canvas.height = document.documentElement.clientHeight,
+                scaleCanvas(gt),
+                uvd(gt.views),
+                iv(gt)
+            };
+            window.onresize = function() {
+                resizeAll()
+            }
+            ,
+            window.onorientationchange = function() {
+                resizeAll()
+            }
+            ;
+            let imagesPath = new Map
+              , images = new Map;
+            gt.onPaintGridCell = function(t, l, e, i, r, s, o, a, n) {
+                let c = a - s
+                  , h = n - o
+                  , d = new Array;
+                if (d.push("rgb(170,178,189)"),
+                d.push("rgb(150,123,220)"),
+                d.push("rgb(140,192,81)"),
+                d.push("rgb(219,68,83)"),
+                d.push("rgb(216,112,173)"),
+                d.push("rgb(246,187,67)"),
+                d.push("rgb(59,174,218)"),
+                d.push("rgb(75,137,220)"),
+                d.push("rgb(185,63,150)"),
+                d.push("rgb(233,87,62)"),
+                l.index < 2) {
+                    if (1 == l.index) {
+                        let e = 1.5 * t.rowHeight;
+                        gt.isMobile && (e = 94),
+                        t.scrollV > 0 && (e -= t.scrollV / 3);
+                        var g = new Array
+                          , u = new Array;
+                        g.push("使用语言"),
+                        u.push("20"),
+                        g.push("支持系统"),
+                        u.push("20"),
+                        g.push("技术栈"),
+                        u.push("100"),
+                        g.push("创建项目"),
+                        u.push("200");
+                        let i = new Array;
+                        !gt.isMobile && c > 500 && (g.push("研发年数"),
+                        u.push("4"),
+                        g.push("著作权"),
+                        u.push("7"),
+                        g.push("原创率"),
+                        u.push("高"),
+                        g.push("性能"),
+                        u.push("强"),
+                        g.push("内存"),
+                        u.push("低"),
+                        g.push("体积"),
+                        u.push("小"),
+                        i.push("种"),
+                        i.push("种"),
+                        i.push("+"),
+                        i.push("+"),
+                        i.push("年"),
+                        i.push("项"),
+                        i.push("%"),
+                        i.push("++"),
+                        i.push("++"),
+                        i.push("++"));
+                        let h = 0
+                          , p = s + (a - s - g.length * (e + h)) / 2;
+                        r.isMobile || (p = 5);
+                        let f = 720 / g.length;
+                        parseInt((720 - tick) / f);
+                        !gt.isMobile && c > 500 && "light" == t.paint.ds && r.dl("rgb(200,200,200)", 1, 0, 0, o - 45, c, o - 45);
+                        for (let l = 0; l < g.length; l++) {
+                            let s = "Default,14"
+                              , a = "Default,24";
+                            t.scrollV > 0 && (a = "Default," + (24 - t.scrollV / 5).toString(),
+                            !gt.isMobile && c > 500 && (a = "Default," + (24 - t.scrollV / 5).toString()),
+                            s = "Default," + (14 - t.scrollV / 10).toString());
+                            let n = r.ts(g[l], s)
+                              , f = r.ts(u[l], a)
+                              , b = new FR(p,o - e / 2 - 10,p + e,o + e / 2 - 10);
+                            b.l += 10,
+                            b.t += 10,
+                            b.r -= 10,
+                            b.b -= 10,
+                            r.isMobile ? r.isMobile && (b.t += 12,
+                            b.b += 12,
+                            b.l -= 5,
+                            b.t -= 5,
+                            b.r += 5,
+                            b.b += 5) : (b.t += 8,
+                            b.b += 8,
+                            b.t += 5,
+                            b.b -= 5);
+                            let w = "rgb(42,138,195)"
+                              , x = "rgba(42,138,195,200)"
+                              , C = 10;
+                            if (!gt.isMobile && c > 500 && (C = 0),
+                            g.length > 4 && (x = w = d[l % d.length]),
+                            "dark" == t.paint.ds)
+                                !gt.isMobile && c > 500 ? (C = 8,
+                                r.frr("rgba(21,24,28,150)", b.l, b.t, b.r, b.b, C)) : (C = 8,
+                                r.frr("rgb(21,24,28)", b.l, b.t, b.r, b.b, C)),
+                                r.dt(g[l], "rgb(150,150,150)", s, b.l + (b.r - b.l - n.cx) / 2, b.t + 20 - n.cy / 2),
+                                r.dt(u[l], "rgb(200,200,200)", a, b.l + (b.r - b.l - f.cx) / 2, b.t + (b.b - b.t - f.cy) / 2);
+                            else {
+                                !gt.isMobile && c > 500 || (C = 8,
+                                r.frr("rgb(240,240,240)", b.l, b.t, b.r, b.b, C)),
+                                r.dt(g[l], "rgb(100,100,100)", s, b.l + (b.r - b.l - n.cx) / 2, b.t + 20 - n.cy / 2);
+                                let t = b.l + (b.r - b.l - f.cx) / 2
+                                  , e = b.t + (b.b - b.t - f.cy) / 2;
+                                if (r.dt(u[l], "rgb(50,50,50)", a, t, e),
+                                l < 6) {
+                                    let s = r.ts(u[l], a)
+                                      , o = "Default,12"
+                                      , n = r.ts(i[l], o);
+                                    r.dt(i[l], "rgb(50,50,50)", o, t + s.cx + 2, e + s.cy - n.cy / 2)
+                                }
+                            }
+                            g.length > 4 ? r.frr(d[l % d.length], b.l + (b.r - b.l - 25 + t.scrollV / 10) / 2, b.b - 15 + t.scrollV / 20, b.l + (b.r - b.l + 25 - t.scrollV / 10) / 2, b.b - 9, 2) : r.frr("rgb(42,138,195)", b.l + (b.r - b.l - 25 + t.scrollV / 10) / 2, b.b - 15 + t.scrollV / 20, b.l + (b.r - b.l + 25 - t.scrollV / 10) / 2, b.b - 10, 2),
+                            r.isMobile ? p += e + h : p += e - 10 + h
+                        }
+                        gt.isMobile && clickIndex > 1 && clickIndex != l.index && ("dark" == r.ds ? r.fr("rgba(0,0,0,200)", s, 0, a, n) : r.fr("rgba(255,255,255,200)", s, 0, a, n))
+                    }
+                } else {
+                    if (!gt.isMobile && c > 500) {
+                        let l = "rgba(50,50,50)"
+                          , e = 0;
+                        "dark" == t.paint.ds ? gList.image2 ? (e = 8,
+                        r.frr("rgba(21,24,28,230)", s + 14, o + 5, a - 14, n - 5, e)) : (e = 8,
+                        r.frr("rgba(21,24,28,150)", s + 14, o + 5, a - 14, n - 5, e)) : (l = "rgb(200,200,200)",
+                        r.frr("rgb(245,245,245)", s + 14, o + 5, a - 14, n - 5, e),
+                        r.drr(l, 1, 0, s + 14, o + 5, a - 14, n - 5, e))
+                    } else
+                        "dark" == t.paint.ds ? r.frr("rgb(21,24,28)", s + 14, o + 5, a - 14, n - 5, 10) : r.frr("rgb(240,240,240)", s + 14, o + 5, a - 14, n - 5, 10);
+                    let e = i.t1;
+                    "关于" == i.t3 && !gt.isMobile && c > 600 && (e = "上海卷卷猫信息技术有限公司 版权所有@2023 " + e);
+                    let g = "Default,15"
+                      , u = "Default,12"
+                      , p = "Default,14"
+                      , f = r.ts(e, g);
+                    if ("关于" == i.t3)
+                        return void ("dark" == t.paint.ds ? r.dt(e, "rgb(200,200,200)", g, s + (c - f.cx) / 2, o + (h - f.cy) / 2) : r.dt(e, "rgb(50,50,50)", g, s + (c - f.cx) / 2, o + (h - f.cy) / 2));
+                    let b = i.t3
+                      , w = i.t4
+                      , x = r.ts(b, u)
+                      , C = null;
+                    if (i.t2 && i.t2.length > 0) {
+                        C = r.ts(i.t2, u);
+                        let t = o + h / 2 + x.cy + 2
+                          , l = new FR(s + 26 + 4,t - C.cy / 2,s + 26 + C.cx + 4,t + C.cy / 2)
+                          , e = l.l
+                          , a = l.t;
+                        l.l -= 4,
+                        l.r += 4,
+                        l.t -= 2,
+                        l.b += 3,
+                        r.frr(d[Number(i.lk) - 1], l.l, l.t, l.r, l.b, 4),
+                        r.dt(i.t2, "rgb(255,255,255)", u, e, a)
+                    } else
+                        r.fe(d[Number(i.lk) - 1], s + 26, o + h / 2 + 3 + x.cy - 4, s + 34, o + h / 2 + 3 + x.cy + 4);
+                    if ("dark" == t.paint.ds) {
+                        if (-1 == clickIndex || !gt.isMobile && clickIndex != l.index) {
+                            let t = i.n;
+                            if (t && t.length > 0) {
+                                let l = 11
+                                  , e = r.ts(t, u)
+                                  , i = s + 15
+                                  , a = o + 10;
+                                r.fe("rgb(50,50,50)", i - l, a - l, i + l, a + l),
+                                r.dt(t, "rgb(200,200,200)", u, i - e.cx / 2, a - e.cy / 2 - 1)
+                            }
+                        }
+                        r.dt(e, "rgb(200,200,200)", g, s + 26, o + h / 2 - x.cy - f.cy / 2),
+                        i.h && r.dt("🔥", "rgb(255,0,0)", "Default,12", s + 26 + f.cx, o + h / 2 - x.cy - 2 * f.cy / 3),
+                        i.t2 && i.t2.length > 0 ? r.dt(b, "rgb(200,200,200)", u, s + 39 + C.cx, o + h / 2 + x.cy + 3 - x.cy / 2) : r.dt(b, "rgb(200,200,200)", u, s + 39, o + h / 2 + x.cy + 3 - x.cy / 2)
+                    } else {
+                        if (-1 == clickIndex || !gt.isMobile && clickIndex != l.index) {
+                            let t = i.n;
+                            if (t && t.length > 0) {
+                                let l = 11
+                                  , e = r.ts(t, u)
+                                  , i = s + 15
+                                  , a = o + 10;
+                                r.fe("rgb(255,255,255)", i - l, a - l, i + l, a + l),
+                                r.de("rgb(200,200,200)", 1, 0, i - l, a - l, i + l, a + l),
+                                r.dt(t, "rgb(50,50,50)", u, i - e.cx / 2, a - e.cy / 2 - 1)
+                            }
+                        }
+                        r.dt(e, "rgb(50,50,50)", g, s + 26, o + h / 2 - x.cy - f.cy / 2),
+                        i.h && r.dt("🔥", "rgb(255,0,0)", "Default,12", s + 26 + f.cx, o + h / 2 - x.cy - 2 * f.cy / 3),
+                        i.t2 && i.t2.length > 0 ? r.dt(b, "rgb(50,50,50)", u, s + 39 + C.cx, o + h / 2 + x.cy + 3 - x.cy / 2) : r.dt(b, "rgb(50,50,50)", u, s + 39, o + h / 2 + x.cy + 3 - x.cy / 2)
+                    }
+                    let m = r.ts("100000.00%", p)
+                      , S = 1 - 210 / c;
+                    gt.isMobile && (S = .5);
+                    let y = new FR(s + c * S + 5,o + h / 2 - m.cy - 4,s + c * S + 5 + m.cx,o + h / 2 + m.cy + 3);
+                    !gt.isMobile && c > 500 && ("dark" == t.paint.ds ? r.dtae(w, "rgb(200,200,200)", p, s + 200 + 30, o + h / 2 - m.cy / 2, c - 260, s + 230 + 5 + m.cy - m.cy / 2) : r.dtae(w, "rgb(50,50,50)", p, s + 200 + 30, o + h / 2 - m.cy / 2, c - 260, s + 230 + 5 + m.cy - m.cy / 2),
+                    "dark" == t.paint.ds ? (r.dl("rgb(0,0,0)", 2, 0, c - 240, o + 5, c - 240, n - 5),
+                    r.dl("rgb(0,0,0)", 2, 0, s + 210, o + 5, s + 210, n - 5)) : (r.dl("rgb(200,200,200)", 1, 0, c - 240, o + 5, c - 240, n - 5),
+                    r.dl("rgb(200,200,200)", 1, 0, s + 210, o + 5, s + 210, n - 5))),
+                    "dark" == t.paint.ds ? gList.image2 ? r.frr("rgba(32,36,38,230)", y.l, o + 15, y.r, n - 15, 5) : !gt.isMobile && c > 500 ? r.frr("rgba(32,36,38,100)", y.l, o + 15, y.r, n - 15, 5) : r.frr("rgb(32,36,38)", y.l, o + 15, y.r, n - 15, 5) : (r.frr("rgb(255,255,255)", y.l, o + 19, y.r, n - 19, 5),
+                    r.drr("rgb(200,200,200)", 1, 0, y.l, o + 19, y.r, n - 19, 5)),
+                    "dark" == t.paint.ds ? (mouseMovePoint.x >= y.l && mouseMovePoint.x <= y.r && mouseMovePoint.y >= o + 15 && mouseMovePoint.y <= n - 15 && r.drr("rgb(42,138,195)", 1, 0, y.l, o + 15, y.r, n - 15, 5),
+                    buttonRects.push(new FR(y.l,o + 15,y.r,n - 15,5))) : (mouseMovePoint.x >= y.l && mouseMovePoint.x <= y.r && mouseMovePoint.y >= o + 19 && mouseMovePoint.y <= n - 19 && r.drr("rgb(42,138,195)", 1, 0, y.l, o + 19, y.r, n - 19, 5),
+                    buttonRects.push(new FR(y.l,o + 19,y.r,n - 19,5)));
+                    let v = y.r - y.l + 10;
+                    if (i.lt2.length > 0)
+                        if ("纪录片" == i.lt2) {
+                            let l = new FR(y.l + v + 10,o + 15 + 10,y.r + v - 10,n - 15 - 10);
+                            "dark" == t.paint.ds ? (!gt.isMobile && c > 500 ? r.frr("rgba(32,36,38,100)", l.l, l.t, l.r, l.b, 5) : r.frr("rgb(32,36,38)", l.l, l.t, l.r, l.b, 5),
+                            r.drr("rgb(100,100,100)", 1, 0, l.l, l.t, l.r, l.b, 5)) : (r.frr("rgb(255,255,255)", l.l, l.t, l.r, l.b, 5),
+                            r.drr("rgb(150,150,150)", 1, 0, l.l, l.t, l.r, l.b, 5)),
+                            mouseMovePoint.x >= l.l && mouseMovePoint.x <= l.r && mouseMovePoint.y >= l.t && mouseMovePoint.y <= l.b && r.drr("rgb(42,138,195)", 1, 0, l.l, l.t, l.r, l.b, 5),
+                            buttonRects.push(new FR(l.l,l.t,l.r,l.b))
+                        } else
+                            "dark" == t.paint.ds ? gList.image2 ? r.frr("rgba(32,36,38,230)", y.l + v, o + 15, y.r + v, n - 15, 5) : !gt.isMobile && c > 500 ? r.frr("rgba(32,36,38,100)", y.l + v, o + 15, y.r + v, n - 15, 5) : r.frr("rgb(32,36,38)", y.l + v, o + 15, y.r + v, n - 15, 5) : (r.frr("rgb(255,255,255)", y.l + v, o + 19, y.r + v, n - 19, 5),
+                            r.drr("rgb(200,200,200)", 1, 0, y.l + v, o + 19, y.r + v, n - 19, 5)),
+                            "dark" == t.paint.ds ? (mouseMovePoint.x >= y.l + v && mouseMovePoint.x <= y.r + v && mouseMovePoint.y >= o + 15 && mouseMovePoint.y <= n - 15 && r.drr("rgb(42,138,195)", 1, 0, y.l + v, o + 15, y.r + v, n - 15, 5),
+                            buttonRects.push(new FR(y.l + v,o + 15,y.r + v,n - 15))) : (mouseMovePoint.x >= y.l + v && mouseMovePoint.x <= y.r + v && mouseMovePoint.y >= o + 19 && mouseMovePoint.y <= n - 19 && r.drr("rgb(42,138,195)", 1, 0, y.l + v, o + 19, y.r + v, n - 19, 5),
+                            buttonRects.push(new FR(y.l + v,o + 19,y.r + v,n - 19)));
+                    i.diffX = v;
+                    let k = r.ts("运行", p)
+                      , z = r.ts(i.lt2, p)
+                      , P = 15;
+                    if (i.i && !i.initImage) {
+                        i.initImage = !0;
+                        let l = new Image;
+                        l.onload = function() {
+                            i.image2 = l,
+                            ivv(t)
+                        }
+                        ,
+                        l.src = i.i
+                    }
+                    "运行" == i.lt1 ? "dark" == t.paint.ds ? (r.dt(i.lt1, "rgb(200,200,200)", p, s + c * S + 5 + m.cx / 2 - k.cx / 2 - 15, o + h / 2 - k.cy / 2 - 8),
+                    r.dt("在线版", "rgb(200,200,200)", "Default,9", s + c * S + 5 + m.cx / 2 - k.cx / 2 - 15, o + h / 2 + 6)) : (r.dt(i.lt1, "rgb(50,50,50)", p, s + c * S + 5 + m.cx / 2 - k.cx / 2 - 15, o + h / 2 - k.cy / 2 - 8),
+                    r.dt("在线版", "rgb(50,50,50)", "Default,9", s + c * S + 5 + m.cx / 2 - k.cx / 2 - 15, o + h / 2 + 6)) : "dark" == t.paint.ds ? r.dt(i.lt1, "rgb(200,200,200)", p, s + c * S + 5 + m.cx / 2 - k.cx / 2 - 15, o + h / 2 - k.cy / 2) : r.dt(i.lt1, "rgb(50,50,50)", p, s + c * S + 5 + m.cx / 2 - k.cx / 2 - 15, o + h / 2 - k.cy / 2);
+                    let M = s + c * S + 5 + m.cx / 2 - k.cx / 2 - 15 + k.cx + 10
+                      , V = new FR(M + 2,o + h / 2 - 10,M + 20 - 2,o + h / 2 + 10);
+                    if ("运行" == i.lt1 || "视频" == i.lt1 || "下载" == i.lt1 || "详情" == i.lt1) {
+                        let t = new Array
+                          , l = 6;
+                        t.push(new FP(V.l + (V.r - V.l) / 2 - l,V.t + (V.b - V.t) / 2 - l)),
+                        t.push(new FP(V.l + (V.r - V.l) / 2 - l,V.t + (V.b - V.t) / 2 + l)),
+                        t.push(new FP(V.l + (V.r - V.l) / 2 + l,V.t + (V.b - V.t) / 2)),
+                        r.fpg("rgb(170,178,189)", t)
+                    } else
+                        r.drr("rgb(150,150,150)", 1, 0, V.l, V.t, V.r, V.b, 2),
+                        r.dl("rgb(150,150,150)", 1, 0, V.l + 4, V.t + (V.b - V.t) / 4, V.r - 4, V.t + (V.b - V.t) / 4),
+                        r.dl("rgb(150,150,150)", 1, 0, V.l + 4, V.t + (V.b - V.t) / 2, V.l + 7, V.t + (V.b - V.t) / 2),
+                        r.dl("rgb(150,150,150)", 1, 0, V.l + 4, V.t + 3 * (V.b - V.t) / 4, V.l + 7, V.t + 3 * (V.b - V.t) / 4),
+                        r.dt("A", "rgb(150,150,150)", "Default,10.5", V.l + 8, V.t + 8);
+                    if (i.lt2.length > 0)
+                        if (i.image2) {
+                            let l = s + c * S + 5 + m.cx / 2 - z.cx / 2 + v - P;
+                            i.z ? "dark" == t.paint.ds ? (r.dt(i.lt2, "rgb(200,200,200)", p, l, o + h / 2 - k.cy / 2 - 8),
+                            r.dt("附教程", "rgb(200,200,200)", "Default,9", l, o + h / 2 + 6)) : (r.dt(i.lt2, "rgb(50,50,50)", p, l, o + h / 2 - k.cy / 2 - 8),
+                            r.dt("附教程", "rgb(50,50,50)", "Default,9", l, o + h / 2 + 6)) : "dark" == t.paint.ds ? r.dt(i.lt2, "rgb(200,200,200)", p, l, o + h / 2 - k.cy / 2) : r.dt(i.lt2, "rgb(50,50,50)", p, l, o + h / 2 - k.cy / 2),
+                            r.drawImage(i.image2, l + z.cx + 10, o + h / 2 - 12, l + z.cx + 34, o + h / 2 + 12)
+                        } else if ("纪录片" == i.lt2) {
+                            let l = s + c * S + m.cx / 2 + v - P;
+                            "dark" == t.paint.ds ? r.dt(i.lt2, "rgb(200,200,200)", p, l, o + h / 2 - k.cy / 2) : r.dt(i.lt2, "rgb(50,50,50)", p, l, o + h / 2 - k.cy / 2)
+                        } else {
+                            let l = s + c * S + 5 + m.cx / 2 - z.cx / 2 + v - P;
+                            i.z ? "dark" == t.paint.ds ? (r.dt(i.lt2, "rgb(200,200,200)", p, l, o + h / 2 - k.cy / 2 - 8),
+                            r.dt("附教程", "rgb(200,200,200)", "Default,9", l + 1, o + h / 2 + 6)) : (r.dt(i.lt2, "rgb(50,50,50)", p, l, o + h / 2 - k.cy / 2 - 8),
+                            r.dt("附教程", "rgb(50,50,50)", "Default,9", l + 1, o + h / 2 + 6)) : "dark" == t.paint.ds ? r.dt(i.lt2, "rgb(200,200,200)", p, l, o + h / 2 - k.cy / 2) : r.dt(i.lt2, "rgb(50,50,50)", p, l, o + h / 2 - k.cy / 2);
+                            let e = l + z.cx + 10;
+                            if (V = new FR(e + 2,o + h / 2 - 10,e + 20 - 2,o + h / 2 + 10),
+                            "图片" == i.lt2) {
+                                V.t += 2,
+                                V.b -= 2,
+                                r.drr("rgb(150,150,150)", 1, 0, V.l, V.t, V.r, V.b, 2);
+                                let t = new Array;
+                                t.push(new FP(V.l + 1,V.b)),
+                                t.push(new FP(V.l + 5,V.b - 12)),
+                                t.push(new FP(V.l + 12,V.b)),
+                                r.fpg("rgb(150,150,150)", t);
+                                let l = new Array;
+                                l.push(new FP(V.l + 7,V.b)),
+                                l.push(new FP(V.l + 11,V.b - 10)),
+                                l.push(new FP(V.l + 15,V.b)),
+                                r.fpg("rgb(150,150,150)", l);
+                                let e = 2;
+                                r.fe("rgb(150,150,150)", V.l + 3 * (V.r - V.l) / 4 - e, V.t + (V.b - V.t) / 4 - e, V.l + 3 * (V.r - V.l) / 4 + e, V.t + (V.b - V.t) / 4 + e)
+                            } else if ("运行" == i.lt2) {
+                                let t = new Array;
+                                t.push(new FP(V.l + (V.r - V.l) / 2 - 3,V.t + (V.b - V.t) / 2 - 8)),
+                                t.push(new FP(V.l + (V.r - V.l) / 2 + 3,V.t + (V.b - V.t) / 2 - 8)),
+                                t.push(new FP(V.l + (V.r - V.l) / 2 + 3,V.t + (V.b - V.t) / 2)),
+                                t.push(new FP(V.l + (V.r - V.l) / 2 + 8,V.t + (V.b - V.t) / 2)),
+                                t.push(new FP(V.l + (V.r - V.l) / 2,V.t + (V.b - V.t) / 2 + 9)),
+                                t.push(new FP(V.l + (V.r - V.l) / 2 - 8,V.t + (V.b - V.t) / 2)),
+                                t.push(new FP(V.l + (V.r - V.l) / 2 - 3,V.t + (V.b - V.t) / 2)),
+                                r.fpg("rgb(170,178,189)", t)
+                            } else
+                                r.drr("rgb(175,175,175)", 1, 0, V.l, V.t, V.r, V.b, 2),
+                                r.dl("rgb(175,175,175)", 1, 0, V.l + 4, V.t + (V.b - V.t) / 4, V.r - 4, V.t + (V.b - V.t) / 4),
+                                r.dl("rgb(175,175,175)", 1, 0, V.l + 4, V.t + (V.b - V.t) / 2, V.l + 7, V.t + (V.b - V.t) / 2),
+                                r.dl("rgb(175,175,175)", 1, 0, V.l + 4, V.t + 3 * (V.b - V.t) / 4, V.l + 7, V.t + 3 * (V.b - V.t) / 4),
+                                r.dt("A", "rgb(175,175,175)", "Default,10.5", V.l + 8, V.t + 8)
+                        }
+                    if ((tick > 0 || !gt.isMobile) && clickIndex == l.index) {
+                        let l = tick;
+                        l > 360 && (l -= 360);
+                        let e = new FR(s + 14,o + 5,a - 14,n - 5)
+                          , i = Math.min(e.r - e.l, e.b - e.t)
+                          , c = 20
+                          , h = 1.5 * t.size.cx
+                          , d = h = t.size.cx
+                          , g = new FR(h * (360 - l) / (d = 200) - d,e.t,h * (360 - l) / d,e.b);
+                        if (g.l < e.l && (g.l = e.l),
+                        g.l > e.r && (g.l = e.r),
+                        g.r < e.l && (g.r = e.l),
+                        g.r > e.r && (g.r = e.r),
+                        replayTick > 9 && r.fr("rgba(42,138,195,100)", g.l, g.t, g.r, g.b),
+                        r.dr("rgb(42,138,195)", 1, 0, e.l, e.t, e.r, e.b),
+                        replayTick > 9)
+                            if (l < 90) {
+                                let t = (90 - l) * (i - c) / 60
+                                  , s = l * (i - c) / 60;
+                                r.dl("rgba(42,138,195,200)", 3, 0, e.r - t, e.t, e.r, e.t),
+                                r.dl("rgba(42,138,195,200)", 3, 0, e.r, e.t, e.r, e.t + s)
+                            } else if (l < 180) {
+                                let t = (90 - (l - 90)) * (i - c) / 60
+                                  , s = (l - 90) * (i - c) / 60;
+                                r.dl("rgba(42,138,195,200)", 3, 0, e.r, e.b - t, e.r, e.b),
+                                r.dl("rgba(42,138,195,200)", 3, 0, e.r, e.b, e.r - s, e.b)
+                            } else if (l < 270) {
+                                let t = (90 - (l - 180)) * (i - c) / 60
+                                  , s = (l - 180) * (i - c) / 60;
+                                r.dl("rgba(42,138,195,200)", 3, 0, e.l, e.b, e.l + t, e.b),
+                                r.dl("rgba(42,138,195,200)", 3, 0, e.l, e.b, e.l, e.b - s)
+                            } else if (l < 360) {
+                                let t = (90 - (l - 270)) * (i - c) / 60
+                                  , s = (l - 270) * (i - c) / 60;
+                                r.dl("rgba(42,138,195,200)", 3, 0, e.l, e.t, e.l + s, e.t),
+                                r.dl("rgba(42,138,195,200)", 3, 0, e.l, e.t, e.l, e.t + t)
+                            }
+                        let u = 6
+                          , p = 24;
+                        r.beginPath(),
+                        r.al(e.l + u, e.t + p, e.l + u, e.t + u),
+                        r.al(e.l + u, e.t + u, e.l + p, e.t + u),
+                        r.dp("rgba(42,138,195,200)", 2, 0),
+                        r.closePath(),
+                        r.beginPath(),
+                        r.al(e.l + u, e.b - p, e.l + u, e.b - u),
+                        r.al(e.l + u, e.b - u, e.l + p, e.b - u),
+                        r.dp("rgba(42,138,195,200)", 2, 0),
+                        r.closePath(),
+                        r.beginPath(),
+                        r.al(e.r - u, e.t + p, e.r - u, e.t + u),
+                        r.al(e.r - u, e.t + u, e.r - p, e.t + u),
+                        r.dp("rgba(42,138,195,200)", 2, 0),
+                        r.closePath(),
+                        r.beginPath(),
+                        r.al(e.r - u, e.b - p, e.r - u, e.b - u),
+                        r.al(e.r - u, e.b - u, e.r - p, e.b - u),
+                        r.dp("rgba(42,138,195,200)", 2, 0),
+                        r.closePath()
+                    }
+                    gt.isMobile && clickIndex > 1 && clickIndex != l.index && ("dark" == r.ds ? r.fr("rgba(0,0,0,200)", s, o, a, n) : r.fr("rgba(255,255,255,200)", s, o, a, n))
+                }
+            }
+            ,
+            gt.onPaintGridColumn = function(t, l, e, i, r, s, o) {
+                if (t.scrollV < 150) {
+                    let i = "Default,16"
+                      , r = "Default,13"
+                      , s = "@花卷猫"
+                      , o = "(大型国产化基建项目)";
+                    e.isMobile || gList.size.cx <= 500 || (o = "(大型国产化基建项目，2024年12月1日正式上线运营，请不要从本站以外的地方获取相关代码和资料，以免出现问题)");
+                    let a = e.ts("AAA", i)
+                      , n = e.ts("AAA", r)
+                      , c = e.ts(s, i);
+                    if (l.image2) {
+                        let t = 20
+                          , h = new FR(20,30 - t,20 + 2 * t,30 + t);
+                        "light" == e.ds ? e.fe("rgb(245,245,245)", h.l, h.t, h.r, h.b) : e.fe("rgb(32,36,38)", h.l, h.t, h.r, h.b),
+                        "light" == e.ds ? (e.dt(s, "rgb(0,0,0)", i, h.r + 10, h.t + (h.b - h.t) / 2 - a.cy / 2),
+                        e.dt(o, "rgb(100,100,100)", r, h.r + 15 + c.cx, h.t + (h.b - h.t) / 2 - n.cy / 2)) : (e.dt(s, "rgb(200,200,200)", i, h.r + 10, h.t + (h.b - h.t) / 2 - a.cy / 2),
+                        e.dt(o, "rgb(150,150,150)", r, h.r + 15 + c.cx, h.t + (h.b - h.t) / 2 - n.cy / 2)),
+                        h.l += 6,
+                        h.t += 6,
+                        h.r -= 6,
+                        h.b -= 6,
+                        e.drawImage(l.image2, h.l, h.t, h.r, h.b)
+                    } else {
+                        let e = new Image;
+                        e.onload = function() {
+                            l.image2 = e,
+                            ivv(t)
+                        }
+                        ,
+                        e.onerror = function() {
+                            l.image2 = e,
+                            ivv(t)
+                        }
+                        ,
+                        e.src = "images/logo.png"
+                    }
+                    let h = 10
+                      , d = new FR(t.size.cx - 25 - h,25 - h,t.size.cx - 25 + h,25 + h);
+                    "light" == e.ds ? e.fe("rgb(175,175,175)", d.l, d.t, d.r, d.b) : e.fe("rgb(70,76,79)", d.l, d.t, d.r, d.b),
+                    d.l += h,
+                    d.r += h,
+                    e.fe(t.backColor, d.l, d.t, d.r, d.b)
+                }
+            }
+            ,
+            gt.onPaint = function(t, l, e) {
+                t.size.cx;
+                let i = l.canvas.width / l.ratio / l.sfX;
+                l.fr(t.backColor, 0, 0, i, t.size.cy),
+                l.isMobile || ("light" == l.ds ? l.dl("rgb(200,200,200)", 1, 0, gList.size.cx + 10, 0, gList.size.cx + 10, t.size.cy) : "dark" == l.ds && l.dl("rgb(50,50,50)", 1, 0, gList.size.cx + 10, 0, gList.size.cx + 10, t.size.cy)),
+                buttonRects = [],
+                drawGrid(t, l, e)
+            }
+            ,
+            gt.onPaintBorder = function(t, l, e) {
+                if (drawGridScrollBar(t, l, e),
+                clickIndex > 1) {
+                    let t = gList.rows[clickIndex]
+                      , e = t.cells[0]
+                      , i = "Default,14"
+                      , r = l.ts(e.t4, i)
+                      , s = 0
+                      , o = new FR(0,clickIndex * gList.rowHeight + gList.headerHeight - gList.scrollV,gList.size.cx,(clickIndex + 1) * gList.rowHeight + gList.headerHeight - gList.scrollV)
+                      , a = 300
+                      , n = !1
+                      , c = l.canvas.width / l.ratio / l.sfX;
+                    if ((l.isMobile || c <= 500) && (a = 250,
+                    n = !0),
+                    o = new FR(0,(clickIndex - 2) * gList.rowHeight + gList.headerHeight - gList.scrollV + 100,gList.size.cx,(clickIndex - 2 + 1) * gList.rowHeight + gList.headerHeight - gList.scrollV + 100),
+                    !n) {
+                        o.l = gList.size.cx + 20,
+                        o.r = c - 10;
+                        let t = o.bottom - o.top;
+                        o.t = 25,
+                        o.b = o.t + t
+                    }
+                    let h = o.t
+                      , d = o.b
+                      , g = 0
+                      , u = 0;
+                    if (n || (u = gList.size.cx + 20),
+                    n || r.cx > c - u - 40) {
+                        g = gList.rowHeight,
+                        o.l += 10,
+                        o.r -= 10;
+                        let c = 0
+                          , d = ""
+                          , p = 0
+                          , f = e.t4.length;
+                        for (; p < f; ) {
+                            d += e.t4[p],
+                            (l.ts(d, i).cx > o.r - 40 - u || p == f - 1) && (c++,
+                            d = ""),
+                            p++
+                        }
+                        e.p && c++,
+                        e.d && n && c++,
+                        n ? o.t < gList.size.cy / 2 ? (o.t += gList.rowHeight,
+                        o.b += gList.rowHeight,
+                        o.b - o.t - 60 < r.cy * c && (o.b = o.t + 60 + r.cy * c),
+                        o.b = o.t + c * (r.cy + 7) + 15,
+                        s = o.b + 10) : (o.t -= gList.rowHeight,
+                        o.b -= gList.rowHeight,
+                        o.b - o.t - 60 < r.cy * c && (o.t = h - c * (r.cy + 7) - 15),
+                        o.b = o.t + c * (r.cy + 7) + 15,
+                        s = o.t - a - 10) : (o.b = o.t + c * (r.cy + 7) + 15,
+                        s = o.b + 10);
+                        let b = "rgb(200,200,200)";
+                        "light" == l.ds ? (l.frr("rgba(245,245,245,200)", o.l, o.t, o.r, o.b, 0),
+                        l.drr("rgb(175,175,175)", 1, 0, o.l, o.t, o.r, o.b, 0),
+                        b = "rgb(50,50,50)") : (l.frr("rgba(15,15,15,200)", o.l, o.t, o.r, o.b, 0),
+                        l.drr("rgb(50,50,50)", 1, 0, o.l, o.t, o.r, o.b, 0),
+                        b = "rgb(200,200,200)"),
+                        d = "";
+                        let w = o.t + 10;
+                        for (p = 0,
+                        f = e.t4.length; p < f; ) {
+                            d += e.t4[p],
+                            (l.ts(d, i).cx > o.r - 40 - u || p == f - 1) && (l.dt(d, b, i, o.l + 10, w),
+                            d = "",
+                            w += r.cy + 7),
+                            p++
+                        }
+                        if (e.p) {
+                            let s = "支持平台    " + e.p;
+                            t.index < 11 && (s = "同类产品    " + e.p);
+                            let a = l.ts(s, i);
+                            if ("dark" == l.ds ? (l.dl("rgb(50,50,50)", 1, 0, o.l + 75, w, o.l + 75, o.b),
+                            l.dl("rgb(50,50,50)", 1, 0, o.l, w, o.r, w)) : (l.dl("rgb(175,175,175)", 1, 0, o.l + 75, w, o.l + 75, o.b),
+                            l.dl("rgb(175,175,175)", 1, 0, o.l, w, o.r, w)),
+                            l.dt(s, b, i, o.l + 10, w + 7),
+                            e.d) {
+                                let t = "同类框架    " + e.d;
+                                l.ts(t, i);
+                                n ? ("dark" == l.ds ? l.dl("rgb(50,50,50)", 1, 0, o.l, w + (r.cy + 10), o.r, w + (r.cy + 10)) : l.dl("rgb(175,175,175)", 1, 0, o.l, w + (r.cy + 10), o.r, w + (r.cy + 10)),
+                                l.dt(t, b, i, o.l + 10, w + 7 + (r.cy + 7) + 2)) : ("dark" == l.ds ? (l.dl("rgb(50,50,50)", 1, 0, o.l + a.cx + 30, w, o.l + a.cx + 30, o.b),
+                                l.dl("rgb(50,50,50)", 1, 0, o.l + a.cx + 105, w, o.l + a.cx + 105, o.b)) : (l.dl("rgb(175,175,175)", 1, 0, o.l + a.cx + 30, w, o.l + a.cx + 30, o.b),
+                                l.dl("rgb(175,175,175)", 1, 0, o.l + a.cx + 105, w, o.l + a.cx + 105, o.b)),
+                                l.dt(t, b, i, o.l + a.cx + 40, w + 7))
+                            }
+                        }
+                    }
+                    if (s = o.t < h ? o.t < gList.size.cy - o.b - gList.rowHeight ? d + 10 : o.t - a - 10 : o.t < gList.size.cy - o.b + gList.rowHeight ? o.b + 10 : o.t - a - 10 - g,
+                    e.r) {
+                        let i = new Array;
+                        i.push("rgb(170,178,189)"),
+                        i.push("rgb(150,123,220)"),
+                        i.push("rgb(140,192,81)"),
+                        i.push("rgb(219,68,83)"),
+                        i.push("rgb(216,112,173)"),
+                        i.push("rgb(246,187,67)"),
+                        i.push("rgb(59,174,218)"),
+                        i.push("rgb(75,137,220)"),
+                        i.push("rgb(185,63,150)"),
+                        i.push("rgb(233,87,62)");
+                        let r = new FR(gList.size.cx / 2 - a / 2,s,gList.size.cx / 2 + a / 2,s + a);
+                        n || (r.l = gList.size.cx + (c - gList.size.cx) / 2 - a / 2,
+                        r.r = gList.size.cx + (c - gList.size.cx) / 2 + a / 2,
+                        r.t += 10,
+                        r.b += 10);
+                        let h = "230";
+                        10 == replayTick && tick > 360 && (h = 230 - 230 * (tick - 360) / 360);
+                        let d = i[Number(e.lk) - 1].replace("rgb(", "").replace(")", "");
+                        "dark" == l.ds ? (l.fe("rgba(15,15,15," + h.toString() + ")", r.l, r.t, r.r, r.b),
+                        l.de("rgb(50,50,50)", 1, 0, r.l, r.t, r.r, r.b)) : (l.fe("rgba(245,245,245," + h.toString() + ")", r.l, r.t, r.r, r.b),
+                        l.de("rgb(150,150,150)", 1, 0, r.l, r.t, r.r, r.b));
+                        let g = 50;
+                        "dark" == l.ds ? (l.fe("rgba(0,0,0,200)", r.l + g, r.t + g, r.r - g, r.b - g),
+                        l.de("rgb(50,50,50)", 1, 0, r.l + g, r.t + g, r.r - g, r.b - g)) : (l.fe("rgba(255,255,255,200)", r.l + g, r.t + g, r.r - g, r.b - g),
+                        l.de("rgb(150,150,150)", 1, 0, r.l + g, r.t + g, r.r - g, r.b - g));
+                        let u = e.r.split(",")
+                          , p = r.l + (r.r - r.l) / 2
+                          , f = r.t + (r.b - r.t) / 2
+                          , b = (r.r - r.l) / 2 - 50
+                          , w = new Array
+                          , x = new Array
+                          , C = new Array
+                          , m = new Array
+                          , S = new Array;
+                        S.push("性能"),
+                        S.push("内存"),
+                        S.push("体积"),
+                        S.push("上手"),
+                        S.push("功能"),
+                        S.push("兼容");
+                        let y = "Default,14";
+                        "2" == e.lk ? ((S = new Array).push("界面设计"),
+                        S.push("浏览器"),
+                        S.push("多端互动"),
+                        S.push("网站收集"),
+                        S.push("工具箱"),
+                        S.push("代码编辑")) : "1" == e.lk ? (S = new Array,
+                        t.index > 1 ? (S.push("研发"),
+                        S.push("设计"),
+                        S.push("运营"),
+                        S.push("自媒体"),
+                        S.push("销售"),
+                        S.push("项目")) : (S.push("图形"),
+                        S.push("存储"),
+                        S.push("通讯服务"),
+                        S.push("算法"),
+                        S.push("自动化"),
+                        S.push("人工智能"))) : "6" == e.lk && ((S = new Array).push("基础软件"),
+                        S.push("自动化"),
+                        S.push("工业软件"),
+                        S.push("生产力"),
+                        S.push("互联网"),
+                        S.push("金融量化"));
+                        let v = 0;
+                        for (let t = 0; t < u.length; t++)
+                            v += parseInt(u[t]);
+                        for (let t = 0; t < u.length; t++) {
+                            let e = 60 * t - 60
+                              , i = e
+                              , r = b * parseInt(u[t]) / 100;
+                            if (10 == replayTick && tick > 360) {
+                                let t = 720 - tick;
+                                r = t * r / 360,
+                                i += t
+                            }
+                            let s = p + r * Math.cos(3.14 * i / 180)
+                              , o = f + r * Math.sin(3.14 * i / 180)
+                              , n = p + b * Math.cos(3.14 * e / 180)
+                              , c = f + b * Math.sin(3.14 * e / 180)
+                              , h = p + b / 3 * Math.cos(3.14 * e / 180)
+                              , d = f + b / 3 * Math.sin(3.14 * e / 180)
+                              , g = p + 2 * b / 3 * Math.cos(3.14 * e / 180)
+                              , v = f + 2 * b / 3 * Math.sin(3.14 * e / 180);
+                            w.push(new FP(s,o)),
+                            x.push(new FP(n,c)),
+                            C.push(new FP(h,d)),
+                            m.push(new FP(g,v));
+                            let k = p + (b + 25) * Math.cos(3.14 * e / 180)
+                              , z = f + (b + 25) * Math.sin(3.14 * e / 180)
+                              , P = l.ts(S[t], y);
+                            "dark" == l.ds ? l.dt(S[t], "rgb(200,200,200)", y, k - P.cx / 2, z - P.cy / 2) : l.dt(S[t], "rgb(50,50,50)", y, k - P.cx / 2, z - P.cy / 2);
+                            let M = 30
+                              , V = p + a / 2 * Math.cos(3.14 * (e + M) / 180)
+                              , L = f + a / 2 * Math.sin(3.14 * (e + M) / 180)
+                              , W = 20;
+                            if (10 == replayTick && tick > 360) {
+                                W = (720 - tick) * W / 360
+                            }
+                            let D = p + (a / 2 - W) * Math.cos(3.14 * (e + M) / 180)
+                              , A = f + (a / 2 - W) * Math.sin(3.14 * (e + M) / 180);
+                            "dark" == l.ds ? l.dl("rgb(50,50,50)", 2, 0, V, L, D, A) : l.dl("rgb(150,150,150)", 1, 0, V, L, D, A)
+                        }
+                        let k = "rgb(30,30,30)";
+                        if ("light" == l.ds && (k = "rgb(220,220,220)"),
+                        l.dl(k, 1, 0, x[0].x, x[0].y, x[3].x, x[3].y),
+                        l.dl(k, 1, 0, x[1].x, x[1].y, x[4].x, x[4].y),
+                        l.dl(k, 1, 0, x[2].x, x[2].y, x[5].x, x[5].y),
+                        l.dpg(k, 1, 0, C),
+                        l.dpg(k, 1, 0, m),
+                        l.fpg("rgba(" + d + ",80)", w),
+                        l.dpg("rgb(" + d + ")", 1, 0, w),
+                        e.s && replayTick > 3 && replayTick < 10) {
+                            let t = 9 - replayTick;
+                            for (let e = 0; e < u.length; e++) {
+                                let i = 60 * e - 60;
+                                if (t == e || -1 == t) {
+                                    let t = b * parseInt(u[e]) / 100
+                                      , r = p + t * Math.cos(3.14 * i / 180)
+                                      , s = f + t * Math.sin(3.14 * i / 180)
+                                      , o = 4
+                                      , a = 7;
+                                    l.fe("rgb(" + d + ")", r - o, s - o, r + o, s + o),
+                                    l.de("rgb(" + d + ")", 1.5, 0, r - a, s - a, r + a, s + a);
+                                    let n = u[e]
+                                      , c = parseInt(u[e]);
+                                    n = c >= 95 ? "A+" : c >= 90 ? "A" : c >= 85 ? "B+" : c >= 80 ? "B" : c >= 75 ? "C+" : c >= 70 ? "C" : c >= 65 ? "D+" : c >= 60 ? "D" : "E";
+                                    let h = "Default," + 18..toString()
+                                      , g = l.ts(n, h)
+                                      , w = p + (t - 22) * Math.cos(3.14 * i / 180)
+                                      , x = f + (t - 22) * Math.sin(3.14 * i / 180);
+                                    l.dt(n, "rgb(" + d + ")", h, w - g.cx / 2, x - g.cy / 2)
+                                }
+                            }
+                        }
+                        if ("light" == l.ds) {
+                            if (e.image2) {
+                                let t = 45;
+                                l.drawImage(e.image2, o.l, o.b + 10, o.l + t, o.b + 10 + t)
+                            }
+                            if (e.a) {
+                                let t = 35
+                                  , i = 35
+                                  , r = o.r
+                                  , s = o.b + 10
+                                  , a = e.a.split(",")
+                                  , n = !1
+                                  , c = !1;
+                                for (let t = 0; t < a.length; t++)
+                                    "c" == a[t] ? n = !0 : "y" == a[t] && (c = !0);
+                                let h = "rgb(100,100,100)"
+                                  , d = "rgb(220,220,220)";
+                                n || (h = "rgb(200,200,200)",
+                                d = "rgb(240,240,240)");
+                                let g = new FR(r - 2 * t - 5,s,r - t - 5,s + i);
+                                l.drr(h, 1, 0, g.l + 2, g.t, g.r - 2, g.t + 22, 2),
+                                l.frr(d, g.l + 2 + 2, g.t + 2, g.r - 2 - 2, g.t + 22 - 2, 2),
+                                l.dl(h, 1, 0, g.l + t / 3, g.t + 22, g.l + t / 3, g.t + 28),
+                                l.dl(h, 1, 0, g.l + 2 * t / 3, g.t + 22, g.l + 2 * t / 3, g.t + 28),
+                                l.frr("rgb(255,255,255)", g.l + 5, g.t + 28, g.r - 5, g.t + 33, 1),
+                                l.drr(h, 1, 0, g.l + 5, g.t + 28, g.r - 5, g.t + 33, 1),
+                                h = "rgb(100,100,100)",
+                                d = "rgb(220,220,220)",
+                                c || (h = "rgb(200,200,200)",
+                                d = "rgb(240,240,240)");
+                                let u = new FR(r - t,s,r,s + i);
+                                l.drr(h, 1, 0, u.l + 2, u.t, u.r - 7, u.t + 33, 2),
+                                l.frr(d, u.l + 2 + 2, u.t + 2, u.r - 7 - 2, u.t + 33 - 2 - 3);
+                                let p = 1;
+                                l.fe(h, u.l + 15 - p, u.b - 4 - p, u.l + 15 + p, u.b - 4 + p),
+                                l.frr("rgb(255,255,255)", u.r - 18, u.t + 10, u.r - 2, u.t + 33, 2),
+                                l.drr(h, 1, 0, u.r - 18, u.t + 10, u.r - 2, u.t + 33, 2),
+                                l.frr(d, u.r - 18 + 2, u.t + 10 + 2, u.r - 2 - 2, u.t + 33 - 2 - 2, 2),
+                                l.fe(h, u.l + 25 - p, u.b - 4 - p, u.l + 25 + p, u.b - 4 + p)
+                            }
+                        }
+                        if (!n && e.f) {
+                            let t = "虚拟视图 可视化设计 事件回调 跨线程信号 鼠标点击 手势触摸 矢量缩放".split(" ")
+                              , i = e.f.split(" ")
+                              , r = "Default,13"
+                              , s = (c - gList.size.cx) / 8;
+                            if (s > 100 && (s = 100),
+                            s < 65)
+                                return;
+                            let o = 100
+                              , a = s * t.length
+                              , n = (gList.size.cx - a) / 2;
+                            n = gList.size.cx + (c - gList.size.cx - a) / 2;
+                            let h = f + b + 55;
+                            if (h < 100)
+                                return;
+                            "dark" == l.ds ? (l.fr("rgba(15,15,15,200)", n, h + 15, n + a, h + o - 8),
+                            l.dr("rgb(50,50,50)", 1, 0, n, h + 15, n + a, h + o - 8)) : (l.fr("rgba(255,255,255,200)", n, h + 15, n + a, h + o - 8),
+                            l.dr("rgb(175,175,175)", 1, 0, n, h + 15, n + a, h + o - 8));
+                            for (let e = 0; e < t.length; e++) {
+                                let a = t[e]
+                                  , c = l.ts(a, r)
+                                  , d = null;
+                                d = new FR(n + e * s,h,n + (e + 1) * s,h + o);
+                                let g = !1;
+                                for (let t = 0; t < i.length; t++)
+                                    if (i[t] == a) {
+                                        g = !0;
+                                        break
+                                    }
+                                "dark" == l.ds ? (l.dt(a, "rgb(200,200,200)", r, d.l + (d.r - d.l - c.cx) / 2, d.t + (d.b - d.t - c.cy) / 2 - 15),
+                                e != t.length - 1 && l.dl("rgb(50,50,50)", 1, [2, 2], d.r, d.t + 20, d.r, d.b - 14)) : (l.dt(a, "rgb(55,55,55)", r, d.l + (d.r - d.l - c.cx) / 2, d.t + (d.b - d.t - c.cy) / 2 - 15),
+                                e != t.length - 1 && l.dl("rgb(200,200,200)", 1, [2, 2], d.r, d.t + 20, d.r, d.b - 14)),
+                                d.l += 5,
+                                d.t += 5,
+                                d.r -= 5,
+                                d.b -= 5;
+                                let u = d.l + (d.r - d.l) / 2
+                                  , p = d.t + (d.b - d.t) / 2 + 18
+                                  , f = 12
+                                  , b = 5;
+                                if (10 == replayTick && tick > 630) {
+                                    let t = 720 - tick;
+                                    b = b * t / 90,
+                                    f = f * t / 90
+                                }
+                                let w = new FR(u - f,p - f,u + f,p + f);
+                                if (drawIcon(l, g ? "rgb(125,125,125)" : "rgb(50,50,50)", w, e),
+                                u = w.r,
+                                p = w.b,
+                                g) {
+                                    let t = new Array;
+                                    t.push(new FP(u - b - b / 4,p - b + b / 2)),
+                                    t.push(new FP(u - b / 2,p + b)),
+                                    t.push(new FP(u + b + b / 4 + 1,p - b)),
+                                    "dark" == l.ds ? l.dpl("rgb(100,255,41)", 2, 0, t) : l.dpl("rgb(0,200,0)", 2, 0, t)
+                                } else
+                                    l.dl("rgb(233,87,62)", 2, 0, u - b, p - b, u + b, p + b),
+                                    l.dl("rgb(233,87,62)", 2, 0, u - b, p + b, u + b, p - b)
+                            }
+                        }
+                        if (!n && e.f) {
+                            let t = "键盘输入 镜像虫洞 内存数据库 脚本语言 短连接服务 长连接服务 更多功能".split(" ")
+                              , i = e.f.split(" ")
+                              , r = "Default,13"
+                              , s = (c - gList.size.cx) / 8;
+                            if (s > 100 && (s = 100),
+                            s < 65)
+                                return;
+                            let o = s * t.length
+                              , a = (gList.size.cx - o) / 2;
+                            a = gList.size.cx + (c - gList.size.cx - o) / 2;
+                            let n = f + b + 145;
+                            if (n < 100)
+                                return;
+                            let h = 100;
+                            "dark" == l.ds ? (l.fr("rgba(15,15,15,200)", a, n + 15, a + o, n + h - 8),
+                            l.dr("rgb(50,50,50)", 1, 0, a, n + 15, a + o, n + h - 8)) : (l.fr("rgba(255,255,255,200)", a, n + 15, a + o, n + h - 8),
+                            l.dr("rgb(175,175,175)", 1, 0, a, n + 15, a + o, n + h - 8));
+                            for (let e = 0; e < t.length; e++) {
+                                let o = t[e]
+                                  , c = l.ts(o, r)
+                                  , d = null;
+                                d = new FR(a + e * s,n,a + (e + 1) * s,n + h);
+                                let g = !1;
+                                for (let t = 0; t < i.length; t++)
+                                    if (i[t] == o) {
+                                        g = !0;
+                                        break
+                                    }
+                                "dark" == l.ds ? (l.dt(o, "rgb(200,200,200)", r, d.l + (d.r - d.l - c.cx) / 2, d.t + (d.b - d.t - c.cy) / 2 - 15),
+                                e != t.length - 1 && l.dl("rgb(50,50,50)", 1, [2, 2], d.r, d.t + 20, d.r, d.b - 14)) : (l.dt(o, "rgb(55,55,55)", r, d.l + (d.r - d.l - c.cx) / 2, d.t + (d.b - d.t - c.cy) / 2 - 15),
+                                e != t.length - 1 && l.dl("rgb(200,200,200)", 1, [2, 2], d.r, d.t + 20, d.r, d.b - 14)),
+                                d.l += 5,
+                                d.t += 5,
+                                d.r -= 5,
+                                d.b -= 5;
+                                let u = d.l + (d.r - d.l) / 2
+                                  , p = d.t + (d.b - d.t) / 2 + 18
+                                  , f = 12
+                                  , b = 5;
+                                if (10 == replayTick && tick > 630) {
+                                    let t = 720 - tick;
+                                    b = b * t / 90,
+                                    f = f * t / 90
+                                }
+                                let w = new FR(u - f,p - f,u + f,p + f);
+                                if (drawIcon(l, g ? "rgb(125,125,125)" : "rgb(50,50,50)", w, e + 7),
+                                u = w.r,
+                                p = w.b,
+                                g) {
+                                    let t = new Array;
+                                    t.push(new FP(u - b - b / 4,p - b + b / 2)),
+                                    t.push(new FP(u - b / 2,p + b)),
+                                    t.push(new FP(u + b + b / 4 + 1,p - b)),
+                                    "dark" == l.ds ? l.dpl("rgb(100,255,41)", 2, 0, t) : l.dpl("rgb(0,200,0)", 2, 0, t)
+                                } else
+                                    l.dl("rgb(233,87,62)", 2, 0, u - b, p - b, u + b, p + b),
+                                    l.dl("rgb(233,87,62)", 2, 0, u - b, p + b, u + b, p - b)
+                            }
+                        }
+                    }
+                }
+            }
+            ;
+
+            let checkPaint = function() {
+                -1 != clickIndex && (gt.isMobile ? tick -= 20 : tick -= 12,
+                tick <= 0 ? --replayTick <= 0 ? (tick = 0,
+                gt.isMobile && (clickIndex = -1)) : (tick = 720,
+                iv(gt)) : replayTick >= 9 && iv(gt))
+            }
+              , clickIndex = -1
+              , tick = 0
+              , replayTick = 0;
+            gt.onClickGridCell = function(t, l, e, i, r, s, o, a, n) {
+                console.log(t)
+                let c = 1 - 210 / t.size.cx;
+                if (gt.isMobile && (c = .5),
+                "关于" == i.t3)
+                    window.location.href = i.l;
+                else if (s.x >= t.size.cx * c + i.diffX && s.x <= t.size.cx * c + 2 * i.diffX)
+                    l.index < 2 || (window.location.href = i.l2);
+                else if (s.x >= t.size.cx * c && s.x <= t.size.cx * c + i.diffX)
+                    if (l.index < 2)
+                        ;
+                    else if ("undefined" != typeof facecat)
+                        window.location.href = i.l;
+                    else if (-1 != i.l.indexOf(".mp4")) {
+                        let t = document.getElementById("myvideo");
+                        t.src = i.l,
+                        t.style.display = "block",
+                        t.width = document.documentElement.clientWidth,
+                        t.height = document.documentElement.clientHeight,
+                        t.play()
+                    } else
+                        window.location.href = i.l;
+                else
+                    l.index >= 2 && (clickIndex = l.index,
+                    tick = 720,
+                    replayTick = l.index < 2 ? 1 : 10)
+            }
+            ,
+            gt.onClickGridColumn = function(t, l, e, i, r, s, o) {
+                
+                i.x > t.size.cx - 50 && t.scrollV < 150 && ("dark" == t.paint.ds ? t.paint.ds = "light" : t.paint.ds = "dark",
+                "dark" == gList.paint.ds ? (gList.backColor = "rgb(0,0,0)",
+                gList.borderColor = null,
+                gList.textColor = "rgb(255,255,255)",
+                gList.scrollBarColor = "rgb(100,100,100)") : "light" == gList.paint.ds && (gList.backColor = "rgb(250,250,250)",
+                gList.borderColor = null,
+                gList.textColor = "rgb(0,0,0)",
+                gList.scrollBarColor = "rgb(200,200,200)"),
+                iv(gt))
+            }
+            ;
+            let createCell = function() {
+                let t = new FCGridRow;
+                gList.rows.push(t);
+                let l = new FCGridCell;
+                return t.cells.push(l),
+                l
+            };
+            createCell(),
+            createCell();
+            let drawIcon = function(t, l, e, i) {
+                if (0 == i)
+                    t.dr(l, 1, 0, e.l, e.t, e.r, e.b),
+                    t.dl(l, 1, 0, e.l, e.t + 12, e.r - 2, e.t + 12),
+                    t.dl(l, 1, 0, e.l, e.t + 18, e.r - 2, e.t + 18),
+                    t.dl(l, 1, 0, e.l + 6, e.t, e.l + 6, e.b - 2),
+                    t.dl(l, 1, 0, e.l + 12, e.t, e.l + 12, e.b - 2),
+                    t.dl(l, 1, 0, e.l + 18, e.t, e.l + 18, e.b - 2),
+                    t.fr(l, e.l, e.t, e.r - 1, e.t + 8);
+                else if (1 == i)
+                    t.dl(l, 1, 0, e.l + 12, e.t, e.l + 12, e.b - 1),
+                    t.dr(l, 1, 0, e.l, e.t, e.r, e.b);
+                else if (7 == i) {
+                    t.drr(l, 1, 0, e.l, e.t, e.r, e.b, 0);
+                    let i = "Default,14";
+                    t.dt("ab|", l, i, e.l, e.t + 2)
+                } else if (3 == i)
+                    t.fr(l, e.r - 5, e.t, e.r, e.t + 5),
+                    t.dr(l, 1, 0, e.l, e.t, e.r, e.t + 6),
+                    t.dr(l, 1, 0, e.l + 6, e.t + 5, e.r, e.b),
+                    t.dl(l, 1, 0, e.l + 9, e.t + 10, e.r - 4, e.t + 10),
+                    t.dl(l, 1, 0, e.l + 9, e.t + 14, e.r - 4, e.t + 14),
+                    t.dl(l, 1, 0, e.l + 9, e.t + 18, e.r - 4, e.t + 18);
+                else if (8 == i)
+                    t.dr(l, 1, 0, e.l, e.t, e.r - 5, e.b - 5),
+                    t.dr(l, 1, 0, e.l + 5, e.t + 5, e.r, e.b);
+                else if (5 == i) {
+                    let i = new Array;
+                    i.push(new FP(e.l + 4,e.t)),
+                    i.push(new FP(e.l,e.t)),
+                    i.push(new FP(e.l,e.b)),
+                    i.push(new FP(e.r,e.b)),
+                    i.push(new FP(e.r,e.t)),
+                    i.push(new FP(e.l + 18,e.t)),
+                    t.dpl(l, 1, 0, i);
+                    let r = "Default,10";
+                    t.dt("xy", l, r, e.l + 4, e.t - 8)
+                } else if (6 == i)
+                    t.dr(l, 1, 0, e.l, e.t, e.r, e.b),
+                    t.dl(l, 1, 0, e.l, e.t + 6, e.r - 1, e.t + 6),
+                    t.dl(l, 1, 0, e.l, e.t + 12, e.r - 1, e.t + 12),
+                    t.dl(l, 1, 0, e.l, e.t + 18, e.r - 1, e.t + 18);
+                else if (2 == i)
+                    t.dr(l, 1, 0, e.l, e.t, e.r, e.b),
+                    t.dl(l, 1, 0, e.l, e.t + 12, e.r - 1, e.t + 12),
+                    t.dl(l, 1, 0, e.l + 11, e.t, e.l + 11, e.b - 1);
+                else if (10 == i)
+                    t.dr(l, 1, 0, e.l, e.t, e.r, e.b),
+                    t.dr(l, 1, 0, e.l + 2, e.t + 2, e.l + 8, e.t + 6),
+                    t.dr(l, 1, 0, e.l + 4, e.t + 8, e.l + 10, e.t + 12),
+                    t.dr(l, 1, 0, e.l + 4, e.t + 14, e.l + 10, e.t + 18),
+                    t.dr(l, 1, 0, e.l + 4, e.t + 20, e.l + 10, e.t + 24),
+                    t.dl(l, 1, 0, e.l + 12, e.t + 10, e.l + 22, e.t + 10),
+                    t.dl(l, 1, 0, e.l + 12, e.t + 16, e.l + 22, e.t + 16),
+                    t.dl(l, 1, 0, e.l + 12, e.t + 22, e.l + 22, e.t + 22);
+                else if (9 == i) {
+                    let i = "Default,10";
+                    t.dr(l, 1, 0, e.l, e.t, e.r, e.b),
+                    t.dt("1", l, i, e.l + 2, e.t),
+                    t.dt("2", l, i, e.l + 2, e.t + 10);
+                    {
+                        let i = new Array
+                          , r = 10
+                          , s = 10
+                          , o = 4;
+                        i.push(new FP(e.l + 7 + r,e.t + s - o - 2)),
+                        i.push(new FP(e.l + 7 + r - o,e.t + s + o - 2)),
+                        i.push(new FP(e.l + 7 + r + o,e.t + s + o - 2)),
+                        t.fpg(l, i)
+                    }
+                    {
+                        let i = new Array
+                          , r = 10
+                          , s = 10
+                          , o = 4;
+                        i.push(new FP(e.l + 7 + r,s + e.t + o + 10)),
+                        i.push(new FP(e.l + 7 + r - o,e.t + s - o + 10)),
+                        i.push(new FP(e.l + 7 + r + o,e.t + s - o + 10)),
+                        t.fpg(l, i)
+                    }
+                } else if (4 == i)
+                    t.dr(l, 1, 0, e.l, e.t, e.r, e.b),
+                    t.fr(l, e.l, e.t, e.l + 11, e.t + 6),
+                    t.dr(l, 1, 0, e.l + 11, e.t, e.r, e.t + 7);
+                else if (11 == i)
+                    t.dr(l, 1, 0, e.l, e.t, e.r, e.b),
+                    t.fr(l, e.l, e.t, e.r - 1, e.t + 6),
+                    t.dl(l, 1, 0, e.l + 3, e.t + 11, e.l + 9, e.t + 11),
+                    t.dl(l, 1, 0, e.l + 3, e.t + 17, e.l + 9, e.t + 17),
+                    t.dr(l, 1, 0, e.l + 12, e.t + 9, e.l + 21, e.t + 13),
+                    t.dr(l, 1, 0, e.l + 12, e.t + 16, e.l + 21, e.t + 20);
+                else if (12 == i) {
+                    t.dr(l, 1, 0, e.l, e.t, e.r, e.b);
+                    let i = (e.r - e.l) / 3;
+                    t.fr(l, e.l + 2, e.t + 10, e.l + i, e.b - 1),
+                    t.fr(l, e.l + i + 1, e.t + 5, e.l + 2 * i - 1, e.b - 1),
+                    t.fr(l, e.l + 2 * i, e.t + 10, e.l + 3 * i - 2, e.b - 1)
+                } else
+                    13 == i && e.r - e.l > 10 && (t.de(l, 1, 0, e.l - 2, e.t - 2, e.r + 2, e.b + 2),
+                    t.de(l, 1, 0, e.l + 5, e.t + 5, e.r - 5, e.b - 5))
+            };
+            {
+                let t = createCell();
+                t.t1 = "项目简介",
+                t.t2 = "",
+                t.t3 = "当前等级:LV10/60",
+                t.t4 = '打造全新的国产基础框架标准，自研跨平台或跨语言的图形、通讯、服务、存储、计算、代码编辑器、编程语言、多端互动、人工智能的基建设施，用它们来制作基础软件、自动化、工业软件、生产力、智能设备、上位机、嵌入式、车载、军工、人工智能、物联网、互联网、金融量化等领域的专业应用和系统。全面支持国内外的操作系统和平台，包括Windows11/10/8/7/XP、MacOS、iPhone、iPad、Android、鸿蒙、GNOME、Ubuntu、统信UOS、深度、麒麟、中兴新支点等。现已制作了二十多种语言的百个不同技术栈版本，对命名、语法、开发工具和配置进行了大一统，性能、内存、体积和稳定性等表现都达到极致。该框架没有任何替代目标，除了完全基于操作系统和语言SDK的纯净模式，还有Qt、Gtk、Avalonia、Flutter、Vue、React、Electron和Tauri等几十种融合模式，未明确标注"AI辅助生成"的公开代码，均为手工编写。',
+                t.l = "page/industry.html",
+                t.l2 = "page/picture.html",
+                t.lt1 = "案例",
+                t.lt2 = "图片",
+                t.lk = "1"
+            }
+            let surl = "https://www.jjmfc.com/software/"
+              , murl = "http://www.jjmfc.com/document/movies/"
+              , furl = "frame/"
+              , curl = "software/codemirror5/mode/facecat/"
+              , durl = "https://www.jjmfc.com/document/";
+            {
+                let t = createCell();
+                t.t1 = "作者介绍",
+                t.t2 = "",
+                t.t3 = "大一统程序员",
+                t.t4 = "陶德，经济学专业，曾在大智慧龙软、东方财富和东吴证券等上市公司的机构量化部门担任架构师，所在团队的成员多为世界名校博士(后)，以首席技术官身份参与过融资近亿的创业，前架构代表作品为DTS策略平台和Choice数据。花卷猫经过多年的迭代升级，目前整体代码已达三百多万行，成为很多行业可用的基础框架。由于不少用户对保密有严格要求，花卷猫不会在任何地方公布合作单位和图片，已发布的产品无破解、无爬虫、无灰色、无敏感，缺乏资质牌照的业务坚决不碰。没有在线保存任何用户信息，互联网和金融方面的内容谨慎发展，未发布面向大众的生成式AI、区块链、社交IM、互联网经营服务、行情和交易软件，完全没有GitHub等海外发布和业务。",
+                t.l = "page/contact.html",
+                t.l2 = "https://v.qq.com/x/cover/mzc0039jcplh3gp/b3324ldhdni.html",
+                t.lt1 = "详情",
+                t.lt2 = "纪录片",
+                t.lk = "1"
+            }
+            {
+                let t = createCell();
+                t.t1 = "花卷猫互动Windows版",
+                t.t2 = "App",
+                t.t3 = "工具+浏览器(仅0.62M)",
+                t.t4 = "使用花卷猫C++和C#框架开发，包含自研的可视化设计、代码编辑器、多端互动和内存数据库等功能，另内嵌了微软WebView2，可以作为功能较完整的浏览器使用，解压直接使用。该客户端可直接转为服务端，在Wifi、局域网和互联网环境下，私有部署为智能设备互联中心，所有平台的花卷猫互动都可以组队接入，任何语言的外部程序也可以与本机通讯，程序已被拆解为数百个基因，通过调用花卷猫研发的脚本语言，可以实现消息发送、文件传输、协作互动、云盘存储和自动化，更可以用人工智能驱动。",
+                t.l = murl + "2.mp4",
+                t.l2 = surl + "FaceCat.zip",
+                t.lt1 = "视频",
+                t.lt2 = "下载",
+                t.i = "images/windows.png",
+                t.lk = "2",
+                t.r = "70,70,80,80,80,70",
+                t.p = "VSCode、Chrome、Qt Creator",
+                t.f = "虚拟视图 可视化设计 事件回调 跨线程信号 鼠标点击 矢量缩放 键盘输入 镜像虫洞 内存数据库 脚本语言 短连接服务 长连接服务 更多功能",
+                t.h = !0,
+                t.a = "c"
+            }
+            {
+                let t = createCell();
+                t.t1 = "花卷猫互动MacOS版",
+                t.t2 = "App",
+                t.t3 = "工具+浏览器(仅3.94M)",
+                t.t4 = "使用花卷猫C++框架开发，包含自研的可视化设计、代码编辑器、多端互动和内存数据库等功能，另内嵌了WkWebView，可以作为功能较完整的浏览器使用，打开dmg拖拽到应用中，并到系统偏好设置中添加信任。该客户端可直接转为服务端，在Wifi、局域网和互联网环境下，私有部署为智能设备互联中心，所有平台的花卷猫互动都可以组队接入，任何语言的外部程序也可以与本机通讯，程序已被拆解为数百个基因，通过调用花卷猫研发的脚本语言，可以实现消息发送、文件传输、协作互动、云盘存储和自动化，更可以用人工智能驱动。",
+                t.l = murl + "3.mp4",
+                t.l2 = surl + "FaceCat.dmg",
+                t.i = "images/macos.png",
+                t.lt1 = "视频",
+                t.lt2 = "下载",
+                t.lk = "2",
+                t.r = "70,70,80,80,80,70",
+                t.p = "VSCode、Chrome、Qt Creator",
+                t.f = "虚拟视图 可视化设计 事件回调 跨线程信号 鼠标点击 矢量缩放 键盘输入 镜像虫洞 内存数据库 脚本语言 短连接服务 长连接服务 更多功能",
+                t.h = !0,
+                t.a = "c"
+            }
+            {
+                let t = createCell();
+                t.t1 = "花卷猫互动安卓版",
+                t.t2 = "App",
+                t.t3 = "工具+浏览器(仅5.36M)",
+                t.t4 = "使用花卷猫Java框架开发，包含自研的代码编辑器、多端互动和内存数据库等功能，另内嵌了WebView，可以作为功能较完整的浏览器使用。该客户端可直接转为服务端，在Wifi、局域网和互联网环境下，私有部署为智能设备互联中心，所有平台的花卷猫互动都可以组队接入，任何语言的外部程序也可以与本机通讯，程序已被拆解为数百个基因，通过调用花卷猫研发的脚本语言，可以实现消息发送、文件传输、协作互动、云盘存储和自动化，更可以用人工智能驱动。",
+                t.l = murl + "4.mp4",
+                t.l2 = surl + "FaceCat.apk",
+                t.i = "images/android.png",
+                t.lt1 = "视频",
+                t.lt2 = "下载",
+                t.lk = "2",
+                t.r = "10,70,80,80,70,70",
+                t.p = "VSCode、Chrome、Qt Creator",
+                t.f = "虚拟视图 事件回调 跨线程信号 手势触摸 矢量缩放 键盘输入 镜像虫洞 内存数据库 脚本语言 短连接服务 长连接服务 更多功能",
+                t.h = !0,
+                t.a = "y"
+            }
+            {
+                let t = createCell();
+                t.t1 = "花卷猫互动iOS版",
+                t.t2 = "App",
+                t.t3 = "工具+浏览器",
+                t.t4 = "使用花卷猫C++框架开发，包含自研的代码编辑器、多端互动和内存数据库等功能，另内嵌了WkWebView，可以作为功能较完整的浏览器使用，未上线AppStore，由用户自己用XCode安装。该客户端可直接转为服务端，在Wifi、局域网和互联网环境下，私有部署为智能设备互联中心，所有平台的花卷猫互动都可以组队接入，任何语言的外部程序也可以与本机通讯，程序已被拆解为数百个基因，通过调用花卷猫研发的脚本语言，可以实现消息发送、文件传输、协作互动、云盘存储和自动化，更可以用人工智能驱动。",
+                t.l = murl + "10.mp4",
+                t.l2 = surl + "iosapp.zip",
+                t.i = "images/apple.png",
+                t.lt1 = "视频",
+                t.lt2 = "下载",
+                t.lk = "2",
+                t.r = "10,70,80,80,70,70",
+                t.p = "VSCode、Chrome、Qt Creator",
+                t.f = "虚拟视图 事件回调 跨线程信号 手势触摸 矢量缩放 键盘输入 镜像虫洞 内存数据库 脚本语言 短连接服务 长连接服务 更多功能",
+                t.a = "y"
+            }
+            {
+                let t = createCell();
+                t.t1 = "花卷猫互动Linux版",
+                t.t2 = "App",
+                t.t3 = "工具+浏览器(仅5.03M)",
+                t.t4 = "使用花卷猫C++框架开发，包含自研的代码编辑器、多端互动和内存数据库等功能，另内嵌了WebKitGtk，可以作为功能较完整的浏览器使用。。该客户端可直接转为服务端，在Wifi、局域网和互联网环境下，私有部署为智能设备互联中心，所有平台的花卷猫互动都可以组队接入，任何语言的外部程序也可以与本机通讯，程序已被拆解为数百个基因，通过调用花卷猫研发的脚本语言，可以实现消息发送、文件传输、协作互动、云盘存储和自动化，更可以用人工智能驱动，可在Ubuntu、统信UOS、Deepin、麒麟OpenKylin、中兴新支点等操作系统中运行。",
+                t.l = murl + "9.mp4",
+                t.l2 = surl + "facecat_linux.zip",
+                t.i = "images/uos.png",
+                t.lt1 = "视频",
+                t.lt2 = "下载",
+                t.lk = "2",
+                t.r = "70,70,80,80,80,70",
+                t.p = "VSCode、Chrome、Qt Creator",
+                t.f = "虚拟视图 可视化设计 事件回调 跨线程信号 鼠标点击 矢量缩放 键盘输入 镜像虫洞 内存数据库 脚本语言 短连接服务 长连接服务 更多功能",
+                t.a = "c"
+            }
+            {
+                let t = createCell();
+                t.t1 = "花卷猫互动Java版",
+                t.t2 = "App",
+                t.t3 = "软件代码",
+                t.t4 = "使用花卷猫Java框架开发，包含完整的源代码，用户可以自己编译，然后在Ubuntu、统信UOS、Deepin、麒麟OpenKylin等操作系统中运行。该客户端可直接转为服务端，在Wifi、局域网和互联网环境下，私有部署为智能设备互联中心，所有平台的花卷猫互动都可以组队接入，任何语言的外部程序也可以与本机通讯，程序已被拆解为很多的基因，通过调用花卷猫研发的脚本语言，可以实现消息发送、文件传输、协作互动、云盘存储和自动化，更可以用人工智能驱动。",
+                t.l = murl + "14.mp4",
+                t.l2 = furl + "neuronclientjava.zip",
+                t.i = "images/ubuntu.png",
+                t.lt1 = "视频",
+                t.lt2 = "代码",
+                t.lk = "2",
+                t.p = ""
+            }
+           
+            for (let t = 0; t < gList.rows.length; t++)
+                gList.rows[t].cells[0].font = "Default,16";
+            gt.isMobile || (clickIndex = 4),
+            uvd(gt.views),
+            iv(gt),
+            requestAnimationFrame(checkGridDragScroll);
+        </script>
+    </body>
+</html>

@@ -26,7 +26,6 @@ class StrategyDiv(FCView):
     def __init__(self):
         super().__init__()
         self.strategy = {}
-        self.viewType = "div" #类型
         self.status = ""
         self.size = FCSize(200, 300)
         self.viewType = "strategyDiv"
@@ -52,19 +51,11 @@ class StrategyDiv(FCView):
         paint.drawLine("rgb(255,255,255)", 1.5, 0, 180, 8, 190, 20)
         paint.drawLine("rgb(255,255,255)", 1.5, 0, 190, 8, 180, 20)
         paint.drawText(str(strategy[2]), "rgb(175,196,228)", drawFont, 60,  1)
-        paint.drawText("当前价格", "rgb(175,196,228)", drawFont, 6,  30)
-        paint.drawText("9.88", "rgb(255,82,82)", drawFont, 72,  30)
-        paint.drawText("策略类型", "rgb(175,196,228)", drawFont, 6,  70)
-        paint.drawText(str(strategy[4]), "rgb(255,82,82)", drawFont, 72,  70)
-        paint.drawText("策略摘要", "rgb(175,196,228)", drawFont, 6,  110)
-        paint.drawText(strategy[6], "rgb(255,82,82)", drawFont, 72,  110)
-        paint.drawText("通知等级", "rgb(175,196,228)", drawFont, 6,  150)
-        paint.drawText(str(strategy[7]), "rgb(255,82,82)", drawFont, 72,  150)
-        paint.drawText("通知冷却", "rgb(175,196,228)", drawFont, 6,  190)
-        paint.drawText(str(strategy[8]) + "分钟", "rgb(255,82,82)", drawFont, 72,  190)
-        paint.drawText("通知次数", "rgb(175,196,228)", drawFont, 6,  230)
-        paint.drawText( str(strategy[11]) + "/" + str(strategy[10]), "rgb(255,82,82)", drawFont, 72,  230)
-        paint.drawText("上次通知", "rgb(175,196,228)", drawFont, 6,  270)
+        arr1 = ["当前价格","策略类型","策略摘要","通知等级","通知冷却","通知次数"]
+        arr2 = ["9.88",str(strategy[4]),strategy[6],str(strategy[7]),str(strategy[8]) + "分钟",str(strategy[11]) + "/" + str(strategy[10])]
+        for i in range(0, len(arr1)):
+            paint.drawText(arr1[i], "rgb(175,196,228)", drawFont, 6,  30 + 40 * i)
+            paint.drawText(arr2[i], "rgb(255,82,82)", drawFont, 72,  30 + 40 * i)
 
     def onPaintStrategyDivBorder(self, view, paint, clipRect):
         if view.viewType == "strategyDiv":
@@ -93,11 +84,3 @@ class StrategyDiv(FCView):
             view.scrollV = oldScrollV
         invalidateView(view)
 
-    #获取价格数据
-    def getPriceColor(self, price, comparePrice):
-        if price != 0:
-            if price > comparePrice:
-                return "rgb(255,82,82)"
-            elif price < comparePrice:
-                return "rgb(46,255,50)"
-        return "rgb(190,190,235)"

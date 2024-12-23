@@ -830,6 +830,8 @@ class FCButton extends FCView {
 		super.size = new FCSize(100, 20); //大小
 		super.pushedColor = "rgb(200,200,200)"; //鼠标按下时的颜色
 		super.viewType = "button"; //类型
+		super.backColor = "rgb(255,255,255)"
+		super.textColor = "rgb(0,0,0)"
 	}
 };
 

@@ -4,12 +4,10 @@ import json
 import requests
 import time
 from contextlib import asynccontextmanager
-from pydantic import BaseModel
 import sqlite3
 from typing import Dict
 import datetime
 import asyncio
-import notify
 import websockets
 import uvicorn
 import json
@@ -60,7 +58,7 @@ class BinanceWebSocketClient:
                 print("Connection closed, attempting to reconnect...")
                 break
             except Exception as e:
-                print(f"Error: {e}")
+                print(f"Here Error: {e}")
                 break
     def update_strategies(self):
         # 更新策略池
@@ -91,15 +89,15 @@ class BinanceWebSocketClient:
             database_symbols = cursor.fetchall()
             if not result:
                 raise HTTPException(status_code=404, detail="Strategy record not found")
-            total_notify_times = result["total_notify_times"]
-            notified_times = result["notified_times"]
+            total_notify_times = result[10]
+            notified_times = result[11]
             print(f"notified_times:{notified_times}")
             active = 1
             if total_notify_times - 1 == notified_times:
                 active = 0
-                if database_symbols.count(result["symbol"]) == 1 and ws_client.subscribed_streams.count(result["symbol"]) == 1:
+                if database_symbols.count(result[2]) == 1 and ws_client.subscribed_streams.count(result[2]) == 1:
                     print("取消订阅")
-                    ws_client.unsubscribe(result["symbol"])
+                    ws_client.unsubscribe(result[2])
                 
             # 更新 active 字段
             update_query = """
@@ -121,6 +119,18 @@ class BinanceWebSocketClient:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
         
+    def send_wechat_notice(self, content): # 发送通知到微信
+        url = "http://120.48.136.60:8080/api/sendtxtmsg"
+        payload = {
+            "wxid": "wxid_6uj28bul7xqc22",
+            "content": content,
+            "atlist": []
+            }
+        response = requests.post(url, json=payload)
+        if response.status_code == 200:
+            print("通知成功")
+        else:
+            print("通知失败")
     def process(self, callbackData):
         # 检查是否是目标事件
         if "e" not in callbackData or callbackData["e"] != "avgPrice":
@@ -131,27 +141,27 @@ class BinanceWebSocketClient:
         price = float(callbackData["w"])
         
         for strategy in self.strategies:
-            strategy_type = strategy["strategy_type"]
+            strategy_type = strategy[4]
             if strategy_type != 0:  # 只处理价格破位策略
                 continue
             
-            strategy_symbol = strategy["symbol"].lower()
+            strategy_symbol = strategy[2].lower()
             if callback_symbol.lower() != strategy_symbol:  # 检查是否是匹配的代币
                 continue
             
             # 解析策略数据
-            strategy_data = json.loads(strategy["strategy"])
+            strategy_data = json.loads(strategy[5])
             up_over = float(strategy_data["up_over"])
             down_under = float(strategy_data["down_under"])
-            strategy_id = strategy["strategy_id"]
-            last_notify_time = strategy["last_notify_time"]
-            notify_interval_time = strategy["notify_interval_time"] * 60
-            notified_times = strategy["notified_times"]
-            total_notify_times = strategy["total_notify_times"]
+            strategy_id = strategy[1]
+            last_notify_time = strategy[9]
+            notify_interval_time = strategy[8] * 60
+            notified_times = strategy[11]
+            total_notify_times = strategy[10]
 
             # 打印调试信息
-            # print(f"标的 {callback_symbol} 当前价格 {price:.2f} 涨破价格 {up_over} 跌破价格 {down_under} "
-                #   f"通知间隔 {time.time() - last_notify_time}")
+            print(f"标的 {callback_symbol} 当前价格 {price:.2f} 涨破价格 {up_over} 跌破价格 {down_under} "
+                  f"通知间隔 {time.time() - last_notify_time}")
 
             # 检查通知条件
             if time.time() - last_notify_time < notify_interval_time:
@@ -164,10 +174,10 @@ class BinanceWebSocketClient:
             formatted_time = datetime.datetime.fromtimestamp(time.time()).strftime("%H:%M")
             if price > up_over:
                 self.notify_once(strategy_id)
-                notify.send_wechat_notice(f"{formatted_time}\n{callback_symbol} 🚀涨破{up_over}\n当前：{price}$")
+                self.send_wechat_notice(f"{formatted_time}\n{callback_symbol} 🚀涨破{up_over}\n当前：{price}$")
             elif price < down_under:
                 self.notify_once(strategy_id)
-                notify.send_wechat_notice(f"{formatted_time}\n{callback_symbol} ⬇️跌破{down_under}\n当前：{price}$")
+                self.send_wechat_notice(f"{formatted_time}\n{callback_symbol} ⬇️跌破{down_under}\n当前：{price}$")
                 
 
     def subscribe(self, stream):
@@ -362,7 +372,7 @@ def get_all_strategy():
         cursor.execute(query,)
         result = cursor.fetchall()
         if result:
-            return result
+            return json.dumps(result)
         else:
             raise HTTPException(status_code=404, detail="Strategy record not found")
     except Exception as e:
@@ -564,4 +574,4 @@ def start_websocket_client():
 if __name__ == "__main__":
     websocket_thread = threading.Thread(target=start_websocket_client, daemon=True)
     websocket_thread.start()
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8002)

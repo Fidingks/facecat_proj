@@ -107,8 +107,6 @@ def process(data):
 		message = data.get("message", "")
 		parsed_message = ast.literal_eval(message)  # 使用 literal_eval 解析
 		StrategyCallBack(parsed_message)
-ws_client = WebSocketClient(server_url= "ws://localhost:8000/ws", on_message_callback=process)
-ws_client.start()
 
 #开始Http请求
 #url:地址
@@ -395,37 +393,6 @@ def StrategyCallBack(data):
 	ChangeLocation(allStrategy.views, allStrategy.size.cx)
 	invalidate(gPaint)
 
-# 查询策略数据库
-def queryStrategy():
-	tag = []
-	url = "http://127.0.0.1:8000/get-strategy-by-wallet/" + "FWnPy6eH9Y5DbPjui8ojCdwz5gv6WqzSK3hFc5ouct6C"
-	getRequest(url, StrategyCallBack, tag)
-
-# 删除回调
-def DeleteCallBack(data):
-	queryStrategy()
-
-# 删除策略
-def deleteStrategyById(strategy_id):
-	tag = []
-	payload = {"strategy_id":strategy_id}
-	url = f"http://127.0.0.1:8000/delete-strategy/"
-	postRequest(url, payload, DeleteCallBack, tag)
-
-# 更新回调
-def UpdateCallBack(data):
-	queryStrategy()
-
-# 更新策略
-def updateStrategy(payload):
-	tag = []
-	url = f"http://127.0.0.1:8000/update-strategy/"
-	postRequest(url, payload, UpdateCallBack, tag)
-
-#添加回调
-def addCallBack(data):
-	print(data.data)
-	queryStrategy()
 
 #绘制视图
 #view:视图
@@ -520,6 +487,16 @@ def onClick(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
 		drawControlPanelDefault(current_strategy)
 		invalidate(gPaint)
 
+def drawControlPanelDefault(strategy):
+	view = findViewByName("control", gPaint.views)
+	view.views = []
+	addButton = FCButton()
+	addButton.font = "Default,14"
+	addButton.location = FCPoint(50,200)
+	addViewToParent(addButton,  view)
+	addButton.text = "添加策略"
+	addButton.onClick = AddStrategyToAll
+
 # 添加策略回调
 def AddStrategyToAll(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks):
 	print("添加一个策略")
@@ -534,7 +511,6 @@ def AddStrategyToAll(view, firstTouch, firstPoint, secondTouch, secondPoint, cli
     "notify_interval_time": 30,
     "total_notify_times": 3
 	}
-	url = f'''http://127.0.0.1:8000/add-strategy/'''
 	ws_client.send_message("add_strategy", payload)
 
 
@@ -543,6 +519,7 @@ def ChangeStrategy(view, firstTouch, firstPoint, secondTouch, secondPoint, click
 	symbol = control_panel.views[1].text
 	strategy_type = control_panel.views[2].text
 	strategy_id = control_panel.views[10].viewName[6:] 
+	print(control_panel.views[10].viewName)
 	strategy_abstract = control_panel.views[4].text
 	up_over = control_panel.views[5].text
 	down_under = control_panel.views[6].text
@@ -689,15 +666,7 @@ def onClickStrategyDiv(view, firstTouch, firstPoint, secondTouch, secondPoint, c
 			global current_strategy
 			current_strategy = view.strategy
 			invalidate(gPaint)
-		elif view.status == "inactive":
-			view.borderColor = "rgb(184,255,137)"
-			view.status = "active"
-			print("启动策略")
-		elif view.status == "active":
-			view.borderColor = "rgb(255,255,255)"
-			view.status = "inactive"
-			print("停止策略")
-	
+
 #创建单元格
 def createGridCell (grid):
 	gridCell = FCGridCell()
@@ -846,6 +815,9 @@ def WndProc(hwnd,msg,wParam,lParam):
 		gPaint.dealData()
 	return WndProcDefault(gPaint,hwnd,msg,wParam,lParam)
 
+ws_client = WebSocketClient(server_url= "ws://localhost:8002/ws", on_message_callback=process)
+ws_client.start()
+
 gPaint = FCPaint() #创建绘图对象
 gPaint.defaultUIStyle = "dark"
 gPaint.onPaint = onPaint
@@ -866,24 +838,10 @@ with open(f'{current_directory}\\xml\\mainframe.xml', 'r', encoding='utf-8') as 
 
 
 renderFaceCat(gPaint, xml)
-def drawControlPanelDefault(strategy):
-	view = findViewByName("control", gPaint.views)
-	view.views = []
-	addButton = FCButton()
-	addButton.font = "Default,14"
-	addButton.location = FCPoint(50,200)
-	addViewToParent(addButton,  view)
-	addButton.text = "添加策略"
-	addButton.onClick = AddStrategyToAll
+
 # 绘制控制面板
 
 drawControlPanelDefault(current_strategy)
-
-
-# 绘制策略图层
-StrategyView = findViewByName("allStrategy", gPaint.views)
-# queryStrategy()
-
 
 gridStocks = findViewByName("gridStocks", gPaint.views)
 for i in range(3, len(gridStocks.columns)):
