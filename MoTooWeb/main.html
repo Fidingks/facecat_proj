@@ -5,7 +5,9 @@
     <meta http-equiv="pragma" content="no-cache" />
     <meta http-equiv="Cache-Control" content="no-cache, must-revalidate" />
     <meta http-equiv="expires" content="0" />
-    <title>FaceCat</title>
+    <title>MoToo Crypto监控</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
     <canvas id="mycanvas" width="1000" height="700" style="position: fixed; left: 0px; top: 0px;"/>
@@ -48,18 +50,18 @@
             }
 
             start() {
-                console.log("启动 WebSocket 客户端...");
+                // console.log("启动 WebSocket 客户端...");
                 this.connect();
             }
 
             // 连接到服务器
             connect() {
-                console.log(`尝试连接到服务器: ${this.url}...`);
+                // console.log(`尝试连接到服务器: ${this.url}...`);
                 this.connection = new WebSocket(this.url);
 
                 // WebSocket 连接成功时触发
                 this.connection.onopen = () => {
-                    console.log(`成功连接到服务器: ${this.url}`);
+                    // console.log(`成功连接到服务器: ${this.url}`);
                     this.sendMessage("get_all_strategy", {});
                 };
 
@@ -72,11 +74,10 @@
 
                 // WebSocket 连接关闭时触发
                 this.connection.onclose = (event) => {
-                    console.log("连接已关闭，尝试重新连接...");
+                    // console.log("连接已关闭，尝试重新连接...");
                     setTimeout(() => this.connect(), this.reconnectDelay); // 自动重连
                 };
 
-                // WebSocket 发生错误时触发
                 this.connection.onerror = (error) => {
                     console.error("WebSocket 错误:", error);
                 };
@@ -90,7 +91,7 @@
                         data: data,
                     });
                     this.connection.send(message);
-                    console.log("已发送消息:", message);
+                    // console.log("已发送消息:", message);
                 } else {
                     console.error("连接尚未建立，无法发送消息");
                 }
@@ -312,18 +313,45 @@
             }
             else if (data.action == "start_strategy"){
                 message = data.message
-                var alarm = document.getElementById('alarmSound');
-                alarm.play();
             }
             else if (data.action == "add_strategy"){
                 message = JSON.parse(data.message)
                 StrategyCallBack(message)
             }
             else if (data.action == "notify"){
-                message = JSON.parse(data.message)
-                alert("sss")
+                message = data.message
+                var alarm = document.getElementById('alarmSound');
+                alarm.play();
+                showAlert("报警报警报警")
+                
             }
         }
+
+        function showAlert(message, duration = 3000) {
+            const container = document.getElementById('alert-container');
+            console.log(container)
+            console.log(message)
+            // 创建弹窗元素
+            const alert = document.createElement('div');
+            alert.className = 'alert';
+            alert.textContent = message;
+
+            // 添加到容器中
+            container.appendChild(alert);
+
+            // 延迟显示动画
+            setTimeout(() => {
+                alert.classList.add('show');
+            }, 10);
+
+            // 延迟移除弹窗
+            setTimeout(() => {
+                alert.classList.remove('show');
+                setTimeout(() => {
+                container.removeChild(alert);
+                }, 300); // 等待动画结束后移除
+            }, duration);
+            }
         /*
         * 重绘背景的实现方法
         * view:视图
@@ -468,9 +496,7 @@
         
         let drawControlPanel = function(view, paint, strategy, clipRect){
             paint.drawText("编辑策略", "rgb(175,196,228)", "Default,18", view.size.cx / 2 - 18 * 2,  10)
-            if (strategy == []){
-                x = view.size.cx
-            }else{
+            if (strategy != []){
                 drawFont = "Default,14"
                 if (strategy[4] == 0){ // strategy_type
                     strategy_info = ["资产类别","监控资产","策略类型","创建时间","策略摘要","涨破：","跌破：","通知冷却","通知等级","通知次数"]
@@ -478,6 +504,11 @@
                         paint.drawText(strategy_info[i], "rgb(175,196,228)", drawFont, 5,  40 + 40 * i )
                     }
                 }
+            }else{
+                x = view.size.cx
+                console.log(1)
+                paint.fillRoundRect("rgb(255,0,0)", 50, 200, 100, 230,3);
+                paint.fillRoundRect("rgb(180,180,0)", 50, 200, 100, 230,3);
             }
         }
         
@@ -727,6 +758,7 @@
             strategyDiv.strategy[6] = strategy_abstract
             strategyDiv.strategy[8] = notify_interval_time
             strategyDiv.strategy[5] = JSON.stringify({"up_over":up_over, "down_under":down_under})
+            strategyDiv.strategy[11] = 0
             invalidate(gPaint)
         }
         
@@ -1597,7 +1629,6 @@
         setInterval(queryPrice, 6000);
         
         setInterval(fetchPriceData, 6000)
-  
         /**
          * 绘制横轴刻度的自定义方法
          * chart:图表

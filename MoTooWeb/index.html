@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta http-equiv="pragma" content="no-cache" />
+    <meta http-equiv="Cache-Control" content="no-cache, must-revalidate" />
+    <meta http-equiv="expires" content="0" />
+    <title>MoToo Crypto监控</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <canvas id="mycanvas" width="1000" height="700" style="position: fixed; left: 0px; top: 0px;"/>
+    <script type="text/javascript" src="facecat.js"></script>
+    <script type="text/javascript" src="stock.js"></script>
+    <audio id="alarmSound" src="alarm.mp3" preload="auto"></audio>
+    <script type="text/javascript">
+        let canvas = document.getElementById("mycanvas"); //绘图区域
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        let gPaint = new FCPaint(); //绘图对象
+        gPaint.canvas = canvas;
+        scaleCanvas(gPaint);
+        //判断是否移动端
+        gPaint.isMobile = isMobileMode();
+        if (gPaint.isMobile) {
+            gPaint.scaleFactorX = 2.5;
+            gPaint.scaleFactorY = 2.5;
+        }
+        
+        gPaint.defaultUIStyle = "dark";
+        current_strategy = new Array();
+        addDefaultEvent(canvas, gPaint);
+        
+        let query_symbols = {};
+        let latestDataStr = "";
+        let findMyCharts = new Array();
+        let charts = new Array();
+        let currentCode = "600000.SH";
+        let clientTicks = new Array();
+        let priceRowMap = new Map();
+        
+        class WebSocketClient{
+            constructor(server_url, handle_messages=null){
+                this.url = server_url
+                this.connection = null
+                // this.loop = asyncio.new_event_loop()
+                this.thread = null
+                this.handle_messages = handle_messages 
+            }
+
+            start() {
+                // console.log("启动 WebSocket 客户端...");
+                this.connect();
+            }
+
+            // 连接到服务器
+            connect() {
+                // console.log(`尝试连接到服务器: ${this.url}...`);
+                this.connection = new WebSocket(this.url);
+
+                // WebSocket 连接成功时触发
+                this.connection.onopen = () => {
+                    // console.log(`成功连接到服务器: ${this.url}`);
+                    this.sendMessage("get_all_strategy", {});
+                };
+
+                // 收到服务器消息时触发
+                this.connection.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    this.handle_messages(message);
+                    
+                };
+
+                // WebSocket 连接关闭时触发
+                this.connection.onclose = (event) => {
+                    // console.log("连接已关闭，尝试重新连接...");
+                    setTimeout(() => this.connect(), this.reconnectDelay); // 自动重连
+                };
+
+                this.connection.onerror = (error) => {
+                    console.error("WebSocket 错误:", error);
+                };
+            }
+
+            // 发送消息
+            sendMessage(action, data) {
+                if (this.connection && this.connection.readyState === WebSocket.OPEN) {
+                    const message = JSON.stringify({
+                        action: action,
+                        data: data,
+                    });
+                    this.connection.send(message);
+                    // console.log("已发送消息:", message);
+                } else {
+                    console.error("连接尚未建立，无法发送消息");
+                }
+            }
+
+            // 停止 WebSocket 客户端
+            stop() {
+                if (this.connection) {
+                    this.connection.close();
+                    console.log("WebSocket 客户端已停止");
+                }
+            }
+        }
+        
+      
+
+
+        let ChangeLocation = function(views, x){
+            button_width = 200
+            button_height = 300
+            spacing = 10
+
+            let buttons_per_row = Math.floor(x / (button_width + 20)) + 1;
+
+            row = 0  //当前行
+            col = 0  //当前列
+            views.forEach(view => {
+                button_x = col * (button_width + spacing) + spacing
+                button_y = row * (button_height + spacing) + spacing
+                view.location = new FCPoint(button_x, button_y)
+                col += 1
+                if (col >= buttons_per_row){  // 如果当前列数超出每行按钮数，换到下一行
+                    col = 0
+                    row += 1
+                }
+            });
+        }
+
+        let StrategyCallBack = function(data){
+            let allStrategy = findViewByName("allStrategy", gPaint.views)
+            allStrategy.views = new Array()
+            console.log("回调", data)
+            for (let i=0; i <data.length; i++){
+                result = data[i]
+                strategyDiv = new StrategyDiv()
+                strategyDiv.strategy = result
+                strategyDiv.viewName = result[1]
+                strategyDiv.status = result[14] 
+                strategyDiv.symbol = result[2]
+                if (!(result in query_symbols)) {
+                    query_symbols[result[2]] = ["",""];
+                }
+                if (result[14] == 1){
+                    strategyDiv.borderColor = "rgb(184,255,137)"}
+                else{
+                    strategyDiv.status = 0
+                }
+                strategyDiv.onClick = onClickStrategyDiv
+                addViewToParent(strategyDiv, allStrategy)
+            }
+            ChangeLocation(allStrategy.views, allStrategy.size.cx)
+            invalidate(gPaint)
+        }
+
+        let process = function (data){
+            console.log("回调数据",data)
+            if (data.action == "get_all_strategy"){
+                message = JSON.parse(data.message)
+                StrategyCallBack(message)
+            }
+            else if (data.action == "start_strategy"){
+                message = data.message
+            }
+            else if (data.action == "add_strategy"){
+                message = JSON.parse(data.message)
+                StrategyCallBack(message)
+            }
+            else if (data.action == "notify"){
+                message = data.message
+                var alarm = document.getElementById('alarmSound');
+                alarm.play();
+                showAlert("报警报警报警")
+                
+            }
+        }
+
+        function showAlert(message, duration = 3000) {
+            const container = document.getElementById('alert-container');
+            console.log(container)
+            console.log(message)
+            // 创建弹窗元素
+            const alert = document.createElement('div');
+            alert.className = 'alert';
+            alert.textContent = message;
+
+            // 添加到容器中
+            container.appendChild(alert);
+
+            // 延迟显示动画
+            setTimeout(() => {
+                alert.classList.add('show');
+            }, 10);
+
+            // 延迟移除弹窗
+            setTimeout(() => {
+                alert.classList.remove('show');
+                setTimeout(() => {
+                container.removeChild(alert);
+                }, 300); // 等待动画结束后移除
+            }, duration);
+            }
+        /*
+        * 重绘背景的实现方法
+        * view:视图
+        * paint:绘图对象
+        * clipRect:裁剪区域
+        */
+        gPaint.onPaint = function (view, paint, clipRect) {
+            if(view.viewType == "latestdiv"){
+                drawLatestDiv(view, paint, clipRect);
+            }else if(view.viewType == "control"){
+                drawControlPanel(view, paint, current_strategy, clipRect)
+            }else if(view.viewName == "allStrategy"){
+                x = view.size.cx
+		        ChangeLocation(view.views, x)
+            }else{
+                onPaintDefault(view, paint, clipRect);
+            }
+        };
+
+        /*
+        * 绘制最新数据
+        */
+        let drawLatestDiv = function (view, paint, clipRect) {
+            let avgHeight = 20;
+            let drawFont = "Default,14";
+            if (gPaint.isMobile) {
+                drawFont = "Default,12";
+            }
+            let dTop = 30;
+            paint.drawLine(view.borderColor, 1, [], 0, dTop, view.size.cx, dTop);
+            var dataStrs = latestDataStr.split(",");
+            let lastClose = 0;
+            let priceList = new Array();
+            let volList = new Array();
+            let buySellTexts = new Array();
+            if (dataStrs.length > 10) {
+                paint.drawText(dataStrs[0], "rgb(175,196,228)", "Default,14", 5, 7);
+                paint.drawText(dataStrs[1], "rgb(194,151,18)", "Default,14", 80, 7);
+                lastClose = parseFloat(dataStrs[8]);
+                priceList.push(parseFloat(dataStrs[23]));
+                priceList.push(parseFloat(dataStrs[22]));
+                priceList.push(parseFloat(dataStrs[21]));
+                priceList.push(parseFloat(dataStrs[20]));
+                priceList.push(parseFloat(dataStrs[19]));
+                priceList.push(parseFloat(dataStrs[9]));
+                priceList.push(parseFloat(dataStrs[10]));
+                priceList.push(parseFloat(dataStrs[11]));
+                priceList.push(parseFloat(dataStrs[12]));
+                priceList.push(parseFloat(dataStrs[13]));
+
+                volList.push(parseFloat(dataStrs[28]));
+                volList.push(parseFloat(dataStrs[27]));
+                volList.push(parseFloat(dataStrs[26]));
+                volList.push(parseFloat(dataStrs[25]));
+                volList.push(parseFloat(dataStrs[24]));
+                volList.push(parseFloat(dataStrs[14]));
+                volList.push(parseFloat(dataStrs[15]));
+                volList.push(parseFloat(dataStrs[16]));
+                volList.push(parseFloat(dataStrs[17]));
+                volList.push(parseFloat(dataStrs[18]));
+            }
+            buySellTexts.push("卖5");
+            buySellTexts.push("卖4");
+            buySellTexts.push("卖3");
+            buySellTexts.push("卖2");
+            buySellTexts.push("卖1");
+            buySellTexts.push("买1");
+            buySellTexts.push("买2");
+            buySellTexts.push("买3");
+            buySellTexts.push("买4");
+            buySellTexts.push("买5");
+            let textColor = "rgb(175,196,228)";
+            if (view.paint.defaultUIStyle == "light") {
+                textColor = "rgb(0,0,0)";
+            }
+            let maxVol = maxValue(volList);
+            for (let i = 0; i < 10; i++) {
+                let tSize = paint.textSize(buySellTexts[i], drawFont);
+                paint.drawText(buySellTexts[i], textColor, drawFont, 5, dTop + avgHeight / 2 - tSize.cy / 2);
+                if (priceList.length > 0) {
+                    let price = priceList[i];
+                    let upDownColor = "rgb(255,82,82)";
+                    let upDownColor2 = "rgba(255,82,82,50)";
+                    if (price < lastClose) {
+                        upDownColor = "rgb(46,255,50)";
+                        upDownColor2 = "rgba(46,255,50,50)";
+                    } 
+                    if (gPaint.isMobile) {
+                        paint.drawText(priceList[i].toFixed(2), upDownColor, drawFont, 40, dTop + avgHeight / 2 - tSize.cy / 2);
+                    } else {
+                        paint.drawText(priceList[i].toFixed(2), upDownColor, drawFont, 50, dTop + avgHeight / 2 - tSize.cy / 2);
+                    }
+                    if (maxVol > 0) {
+                        if (gPaint.isMobile) {
+                            paint.fillRect(upDownColor2, view.size.cx - volList[i] * 50 / maxVol, dTop + 2, view.size.cx, dTop + avgHeight - 2);
+                        } else {
+                            paint.fillRect(upDownColor2, view.size.cx - volList[i] * 80 / maxVol, dTop + 2, view.size.cx, dTop + avgHeight - 2);
+                        }
+                    }
+                    let volText = (volList[i] / 100).toFixed(0);
+                    let volTextSize = paint.textSize(volText, drawFont);
+                    paint.drawText(volText, textColor, drawFont, view.size.cx - volTextSize.cx - 10, dTop + avgHeight / 2 - volTextSize.cy / 2);
+                }
+                dTop += avgHeight;
+            }
+            paint.drawLine(view.borderColor, 1, [], 0, dTop, view.size.cx, dTop);
+            paint.drawText("现价", "rgb(175,196,228)", drawFont, 5, dTop + 10);
+            paint.drawText("幅度", "rgb(175,196,228)", drawFont, 5, dTop + 35);
+            paint.drawText("总额", "rgb(175,196,228)", drawFont, 5, dTop + 60);
+            paint.drawText("总量", "rgb(175,196,228)", drawFont, 5, dTop + 85);
+            paint.drawText("开盘", "rgb(175,196,228)", drawFont, 110, dTop + 10);
+            paint.drawText("振幅", "rgb(175,196,228)", drawFont, 110, dTop + 35);
+            paint.drawText("最高", "rgb(175,196,228)", drawFont, 110, dTop + 60);
+            paint.drawText("最低", "rgb(175,196,228)", drawFont, 110, dTop + 85);
+            if (dataStrs.length > 10) {
+                let close = parseFloat(dataStrs[2]);
+                let high = parseFloat(dataStrs[3]);
+                let low = parseFloat(dataStrs[4]);
+                let open = parseFloat(dataStrs[5]);
+                let volume = parseFloat(dataStrs[6]);
+                let amount = parseFloat(dataStrs[7]);
+                let diff = 0;
+                if(lastClose > 0){
+                    diff = 100 * (close - lastClose) / lastClose;
+                }
+                
+                let diff2 = 0;
+                if(lastClose > 0){
+                    diff2 = 100 * (high - lastClose) / lastClose - 100 * (low - lastClose) / lastClose;
+                }
+                paint.drawText(close.toFixed(2), getPriceColor(close, lastClose), drawFont, 40, dTop + 10);
+                paint.drawText(diff.toFixed(2) + "%", getPriceColor(close, lastClose), drawFont, 40, dTop + 35);
+                paint.drawText((amount / 10000).toFixed(0), textColor, drawFont, 40, dTop + 60);
+                paint.drawText((volume / 10000).toFixed(0), textColor, drawFont, 40, dTop + 85);
+
+                paint.drawText(open.toFixed(2), getPriceColor(open, lastClose), drawFont, 150, dTop + 10);
+                paint.drawText(diff2.toFixed(2) + "%", getPriceColor(close, lastClose), drawFont, 150, dTop + 35);
+                paint.drawText(high.toFixed(2), getPriceColor(high, lastClose), drawFont, 150, dTop + 60);
+                paint.drawText(low.toFixed(2), getPriceColor(low, lastClose), drawFont, 150, dTop + 85);
+            }
+        };
+        
+        let drawControlPanel = function(view, paint, strategy, clipRect){
+            paint.drawText("编辑策略", "rgb(175,196,228)", "Default,18", view.size.cx / 2 - 18 * 2,  10)
+            if (strategy != []){
+                drawFont = "Default,14"
+                if (strategy[4] == 0){ // strategy_type
+                    strategy_info = ["资产类别","监控资产","策略类型","创建时间","策略摘要","涨破：","跌破：","通知冷却","通知等级","通知次数"]
+                    for (let i = 0; i < strategy_info.length; i++){
+                        paint.drawText(strategy_info[i], "rgb(175,196,228)", drawFont, 5,  40 + 40 * i )
+                    }
+                }
+            }else{
+                x = view.size.cx
+                console.log(1)
+                paint.fillRoundRect("rgb(255,0,0)", 50, 200, 100, 230,3);
+                paint.fillRoundRect("rgb(180,180,0)", 50, 200, 100, 230,3);
+            }
+        }
+        
+
+        /*
+         * 重置大小
+         */
+        let resizeAll = function () {
+            try {
+                canvas.width = document.documentElement.clientWidth;
+                canvas.height = document.documentElement.clientHeight;
+                scaleCanvas(gPaint);
+                updateViewDefault(gPaint.views);
+            } catch (err) {
+                
+            }
+            invalidate(gPaint);
+        };
+
+
+        /*
+        * 监听大小改变
+        */
+        window.onresize = function () {
+            resizeAll();
+        };
+
+        /*
+        * 旋转监听
+        */
+        window.onorientationchange = function () {
+            resizeAll();
+        };
+
+        /*
+        * 创建列
+        * grid:表格
+        */
+        let createGridCell = function (grid) {
+            let gridCell = new FCGridCell();
+            if (grid.paint.defaultUIStyle == "dark") {
+                gridCell.backColor = "none";
+                gridCell.borderColor = "none";
+                gridCell.textColor = "rgb(175,196,228)";
+            } else if (grid.paint.defaultUIStyle == "light") {
+                gridCell.backColor = "none";
+                gridCell.borderColor = "none";
+                gridCell.textColor = "rgb(0,0,0)";
+            }
+            gridCell.font = "Default,13";
+            return gridCell;
+        };
+
+        /*
+        *获取价格颜色
+        */
+        let getPriceColor = function(price, comparePrice){
+            if (price != 0)
+            {
+                if (price > comparePrice)
+                {
+                    return "rgb(255,82,82)";
+                }
+                else if (price < comparePrice)
+                {
+                    return "rgb(46,255,50)";
+                }
+            }
+            return "rgb(190,190,235)";
+        };
+
+        /*
+        * 根据名称查找视图
+        * name:名称
+        * views:视图集合
+        */
+        let findViewsByType = function (findType, views, refViews) {
+            let size = views.length;
+            for (let i = 0; i < size; i++) {
+                let view = views[i];
+                if (view.viewType == findType) {
+                    refViews.push(view);
+                } else {
+                    if (view.views) {
+                        findViewsByType(findType, view.views, refViews);
+                    }
+                }
+            }
+        };
+       
+        /*
+        * 黑色风格
+        */
+        let toBlackChart = function (chart, index) {
+            chart.paint.defaultUIStyle = "dark";
+            chart.backColor = "rgb(0,0,0)";
+            chart.borderColor = "none";
+            chart.textColor = "rgb(175,196,228)";
+            chart.scaleColor = "rgb(75,75,75)";
+            chart.crossTipColor = "rgb(50,50,50)";
+            chart.crossLineColor = "rgb(100,100,100)";
+            chart.gridColor = "rgb(50,50,50)";
+            if(index > 0){
+                chart.upColor = "rgb(186,56,18)";
+                chart.downColor = "rgb(31,182,177)";
+            }else{
+                chart.upColor = "rgb(255,82,82)";
+                chart.downColor = "rgb(46,255,50)";
+            }
+            chart.barStyle = "rect2";
+            chart.candleStyle = "rect2";
+            chart.trendColor = "rgb(255,255,255)";
+            chart.hScaleTextColor = "rgb(194,151,18)";
+            chart.vScaleTextColor = "rgb(194,151,18)";
+        };
+
+        /*
+        * 设置图表的标题
+        */
+        let setChartTitle = function(chart, code, name, intCycle){
+            chart.text = code + " " + name;
+            if(intCycle == 0){
+                chart.text += " 分时";
+            }else if(intCycle < 1440){
+                chart.text += " " + intCycle.toString() + "分钟";
+            }else if(intCycle == 1440){
+                chart.text += " 日线";
+            }else if(intCycle == 10080){
+                chart.text += " 周线";
+            }else if(intCycle == 43200){
+                chart.text += " 月线";
+            }else if(intCycle == 129600){
+                chart.text += " 季线";
+            }else if(intCycle == 259200){
+                chart.text += " 半年线";
+            }else if(intCycle == 518400){
+                chart.text += " 年线";
+            }
+        };
+
+        /*
+        * 点击单元格事件
+        * grid 表格
+        * row 行
+        * gridColumn 列
+        * cell 单元格
+        * firstTouch:是否第一次触摸
+        * secondTouch:是否第二次触摸
+        * firstPoint:第一次触摸的坐标
+        * secondPoint:第二次触摸的坐标
+        */
+        gPaint.onClickGridCell = function (grid, row, gridColumn, cell, firstTouch, firstPoint, secondTouch, secondPoint, clicks) {
+            let code = row.cells[1].value;
+            let name = row.cells[2].value;
+            queryHistoryData(code, name, 0, findMyCharts);
+            queryHistoryData(code, name, 1, findMyCharts);
+            queryHistoryData(code, name, 1440, findMyCharts);
+            currentCode = code;
+            queryNewData();
+            invalidate(grid.paint);
+        };
+
+        /*
+        * 点击方法
+        * view:视图
+        * firstTouch:是否第一次触摸
+        * firstPoint:第一次触摸的坐标
+        * secondTouch:是否第二次触摸
+        * secondPoint:第二次触摸的坐标
+        * clicks:点击次数
+        */
+        gPaint.onClick = function (view, firstTouch, firstPoint, secondTouch, secondPoint, clicks) {
+            onClickDefault(view, firstTouch, firstPoint, secondTouch, secondPoint, clicks);
+            
+    } 
+
+        //解析加载XML
+        let xml = `<?xml version="1.0" encoding="utf-8" ?>
+        <html xmlns="facecat">
+        <body>
+            <div bordercolor="none" name="divInner" dock="fill">
+                <div type="splitlayout" layoutstyle="toptobottom" dock="fill" size="400,400" splitterposition="60,1" name="SplitLayoutDiv" text="SplitLayoutDiv"  >
+                    <div type="layout" dock="fill" backcolor="none" bordercolor="none" name="layout">
+                        <div type="custom" text="笔墨教育" size="120,60" font="Default, 15" name="bimojiaoyu" backcolor="none"> </div>
+                        <div type="custom" text="主页"  size="100,60" font="Default, 15" name="divMain" backcolor="none" ></div>
+                    
+                        <div type="custom" text="对话" size="100,60" font="Default, 15" name="chatPage" backcolor="none"> </div>
+                        <div type="custom" text="令牌"  size="100,60" font="Default, 15" name="tokenPage" backcolor="none" ></div>
+                    
+                        <div type="custom" text="日志" size="100,60" font="Default, 15" name="logPage" backcolor="none"> </div>
+                        <div type="custom" text="绘图"  size="100,60" font="Default, 15" name="drawPage" backcolor="none" ></div>
+                    
+                        <div type="custom" text="账户" size="100,60" font="Default, 15" name="accountPage" backcolor="none"> </div>
+                        <div type="custom" text="查询"  size="100,60" font="Default, 15" name="searchPage" backcolor="none" ></div>
+                        <div type="custom" text="关于"  size="100,60" font="Default, 15" name="aboutPage" backcolor="none" ></div>
+                    
+                    </div>
+                    <div name="pages" />
+                </div>
+            </div>
+        </body>
+        </html>`;
+        const img = new Image();
+        img.src = "image.png";
+
+   
+        let drawNavigateBar = function(view, paint, clipRect){
+            if(view.viewName == "bimojiaoyu"){
+                paint.drawText(view.text, view.textColor, view.font, 50, 23);
+            }else if(view.viewName == "divMain"){
+                paint.drawImage(view.image, 0, 0, view.size.cx, view.size.cy);
+                paint.drawText(view.text, view.textColor, view.font, 50, 23);
+
+            }
+        }
+
+        let bbb = function (view, paint, clipRect){
+            // paint.drawRoundRect(view.borderColor, view.borderWidth, 0, 0, 0, view.size.cx, view.size.cy, view.cornerRadius);
+        }
+        renderFaceCat(gPaint, xml);
+        let layout = findViewByName("layout", gPaint.views)
+        console.log(layout)
+        let bimojiaoyu = findViewByName("bimojiaoyu", gPaint.views)
+        let divMain = findViewByName("divMain", gPaint.views)
+        divMain.image =img
+        divMain.onPaint = drawNavigateBar
+        bimojiaoyu.onPaint = drawNavigateBar
+        bimojiaoyu.onPaintBorder = bbb
+        divMain.onPaintBorder = bbb
+        invalidate(gPaint)
+    </script>
+</body>
+</html>

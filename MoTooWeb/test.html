@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>右下角弹窗示例</title>
+  <style>
+    /* 弹窗容器的样式 */
+    .alert-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 1000;
+    }
+
+    /* 单个弹窗的样式 */
+    .alert {
+      background-color: #333;
+      color: #fff;
+      padding: 15px 20px;
+      border-radius: 5px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+      opacity: 0;
+      transform: translateX(100%);
+      transition: all 0.3s ease;
+    }
+
+    /* 显示时的动画 */
+    .alert.show {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  </style>
+</head>
+<body>
+  <h1>右下角弹窗示例</h1>
+  <button onclick="showAlert('这是一个警报信息！')">显示弹窗</button>
+  <button onclick="showAlert('另一个消息！')">显示另一个弹窗</button>
+
+  <!-- 弹窗容器 -->
+  <div class="alert-container" id="alert-container"></div>
+
+  <script>
+    /**
+     * 显示右下角弹窗
+     * @param {string} message - 弹窗内容
+     * @param {number} duration - 弹窗显示时间（毫秒），默认 3000 毫秒
+     */
+    function showAlert(message, duration = 3000) {
+      const container = document.getElementById('alert-container');
+
+      // 创建弹窗元素
+      const alert = document.createElement('div');
+      alert.className = 'alert';
+      alert.textContent = message;
+
+      // 添加到容器中
+      container.appendChild(alert);
+
+      // 延迟显示动画
+      setTimeout(() => {
+        alert.classList.add('show');
+      }, 10);
+
+      // 延迟移除弹窗
+      setTimeout(() => {
+        alert.classList.remove('show');
+        setTimeout(() => {
+          container.removeChild(alert);
+        }, 300); // 等待动画结束后移除
+      }, duration);
+    }
+  </script>
+</body>
+</html>

@@ -175,6 +175,7 @@ class BinanceWebSocketClient:
             if price > up_over:
                 self.notify_once(strategy_id)
                 self.send_wechat_notice(f"{formatted_time}\n{callback_symbol} 🚀涨破{up_over}\n当前：{price}$")
+                
             elif price < down_under:
                 self.notify_once(strategy_id)
                 self.send_wechat_notice(f"{formatted_time}\n{callback_symbol} ⬇️跌破{down_under}\n当前：{price}$")
@@ -276,7 +277,11 @@ async def websocket_endpoint(websocket: WebSocket):
     # 接受 WebSocket 连接
     await websocket.accept()
     connected_clients.add(websocket)
+    client_info = websocket.client
+    print(client_info.host)  # 输出客户端 IP 地址
+    print(client_info.port)  # 输出客户端端口号
     print("Client connected")
+
     
     try:
         while True:
@@ -304,6 +309,7 @@ async def handle_message(message):
         return {"action": "get_all_strategy", "status": "success", "message": str(results)}
     elif action == "start_strategy":
         result = start_strategy(data)
+        # await connected_clients[0].send_text(json.dumps({"action": "notify", "status": "success", "message": str(1111)}))
         return {"action": "start_strategy", "status": "success", "message": result}
     elif action == "add_strategy":
         if add_strategy(data):
