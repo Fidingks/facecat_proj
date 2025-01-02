@@ -14,6 +14,7 @@ import json
 DATABASE = "../MoToo/data/user.db"
 notify_info = []
 
+
 class BinanceWebSocketClient:
     def __init__(self,):
         # self.url = "wss://156.232.10.79/ws"
